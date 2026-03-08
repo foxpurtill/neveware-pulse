@@ -5,7 +5,9 @@
   "heartbeat_character": "§",
   "default_interval_minutes": 10,
   "emoji_hotkey": "ctrl+alt+e",
-  "recent_emoji": [],
+  "recent_emoji": [
+    "😀"
+  ],
   "modules": {
     "email_watcher": {
       "enabled": true,
