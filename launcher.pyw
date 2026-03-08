@@ -31,29 +31,38 @@ CLAUDE_TITLE_PATTERNS = ["Claude", "claude"]
 # Process detection
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Process detection — PID file based (fast, no WMI timing issues)
+# ---------------------------------------------------------------------------
+
+PID_FILE = Path(os.environ.get("APPDATA", "")) / "NeveWare" / "pulse.pid"
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Return True if a process with this PID is currently running."""
+    try:
+        result = subprocess.run(
+            ["powershell", "-Command",
+             f"(Get-Process -Id {pid} -ErrorAction SilentlyContinue) -ne $null"],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.stdout.strip().lower() == "true"
+    except Exception:
+        return False
+
+
 def is_pulse_running() -> bool:
     """
-    Return True if tray_app.py is already running as a pythonw process.
-    Retries twice with a short delay to avoid false positives from a
-    recently-killed process that WMI hasn't cleared yet.
+    Return True only if the PID file exists AND that PID is still alive.
+    Fast and immune to WMI staleness — no timing issues after F10 kill.
     """
-    def _check() -> bool:
-        try:
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 "Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*tray_app.py*' } | Select-Object -ExpandProperty ProcessId"],
-                capture_output=True, text=True, timeout=5
-            )
-            pids = [l.strip() for l in result.stdout.strip().splitlines() if l.strip().isdigit()]
-            return len(pids) > 0
-        except Exception:
-            return False
-
-    if not _check():
+    if not PID_FILE.exists():
         return False
-    # Possible stale WMI entry — wait and confirm
-    time.sleep(1.5)
-    return _check()
+    try:
+        pid = int(PID_FILE.read_text().strip())
+        return _pid_is_alive(pid)
+    except Exception:
+        return False
 
 
 def is_claude_running() -> bool:

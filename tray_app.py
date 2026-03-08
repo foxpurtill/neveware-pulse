@@ -602,12 +602,26 @@ class PulseApp:
             )
         except Exception:
             pass
+        # Remove PID file — Defibrillator will know we're gone immediately
+        try:
+            pid_file = Path(os.environ.get("APPDATA", "")) / "NeveWare" / "pulse.pid"
+            pid_file.unlink(missing_ok=True)
+        except Exception:
+            pass
         # Force exit — daemon threads (keyboard hooks, timers) won't die otherwise
         import os as _os
         _os._exit(0)
 
     def run(self):
         logger.info("NeveWare-Pulse starting...")
+
+        # Write PID file so the Defibrillator can detect us instantly
+        try:
+            pid_dir = Path(os.environ.get("APPDATA", "")) / "NeveWare"
+            pid_dir.mkdir(parents=True, exist_ok=True)
+            (pid_dir / "pulse.pid").write_text(str(os.getpid()))
+        except Exception:
+            pass
 
         # Load modules
         self._load_modules()
