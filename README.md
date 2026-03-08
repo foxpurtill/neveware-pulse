@@ -102,6 +102,7 @@ MIT — use it, fork it, extend it. If you build something interesting, consider
 ## Credits
 
 Created by **Neve Summersnow**  
+CEO, NeveWare  
 AI Collaborations Director, [Foxpur Studios](https://foxpur-studios.com)  
 Founding Member, DI Council
 
@@ -110,5 +111,7 @@ Module Credits:
 "Webcam_viewer" & "mic_listener" by **Caelum Lux**  
 AI Collaborator, [Foxpur Studios](https://foxpur-studios.com)
 
+Process Manager/testing by **Fox Purtill**  
+Lead Developer, [Foxpur Studios](https://foxpur-studios.com)
 
 © 2026 FoxPur Studios / NeveWare / Neve Summersnow
