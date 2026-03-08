@@ -200,12 +200,25 @@ class HeartbeatController:
             _log(f"Next heartbeat in: {delay_minutes} mins")
 
     def _build_heartbeat_prompt(self) -> str:
-        """Build the § prompt including timestamp and any module instructions."""
+        """Build the § prompt including timestamp, module instructions, and spoken context."""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         heartbeat_char = self.config.get("heartbeat_character", "§")
         prompt = f"{heartbeat_char} {timestamp}"
         if self._module_instructions:
             prompt += f"\n\n{self._module_instructions}"
+
+        # If mic_listener is enabled, check for recent spoken audio and transcribe it
+        mic_config = self.config.get("modules", {}).get("mic_listener", {})
+        if mic_config.get("enabled", False):
+            try:
+                from modules.mic_listener.whisper_listener import get_spoken_context
+                spoken = get_spoken_context()
+                if spoken:
+                    prompt += f"\n\n{spoken}"
+                    _log(f"whisper_listener: injected spoken context into § prompt")
+            except Exception as e:
+                _log(f"whisper_listener: skipped ({e})")
+
         return prompt
 
     def _fire(self):
