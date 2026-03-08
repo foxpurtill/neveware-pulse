@@ -1,0 +1,26 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime state — changes every session, not source code
+.state.json
+
+# OAuth tokens — sensitive, never commit
+modules/email_watcher/token_*.json
+modules/email_watcher/credentials.json
+
+# Logs — runtime output, not source
+*.log
+
+# Config overrides — user-specific
+# (config.json is committed as a template, personal changes stay local)
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
