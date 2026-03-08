@@ -159,6 +159,9 @@ def _launch_claude_app():
         return True
     except Exception:
         return False
+
+
+def show_popup(state_key: str):
     s = STATES[state_key]
 
     root = tk.Tk()
