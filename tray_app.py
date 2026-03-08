@@ -378,6 +378,7 @@ class PulseApp:
     def _update_icon(self):
         if self.tray_icon:
             self.tray_icon.icon = self._make_current_icon()
+            self.tray_icon.menu = self._build_menu()  # keep label in sync with F1 too
 
     # ---- Toggle ----
 
@@ -431,7 +432,12 @@ class PulseApp:
     # ---- Menu builders ----
 
     def _build_menu(self) -> Menu:
+        # On Windows, pystray's on_activate doesn't fire reliably.
+        # Setting default=True on a menu item makes it the left-click action.
+        active_label = "● Heartbeat Active (F1 to pause)" if self.active else "○ Heartbeat Paused (F1 to resume)"
         items = [
+            Item(active_label, self._menu_toggle, default=True),
+            Menu.SEPARATOR,
             Item("Emoji Picker", self._menu_emoji_picker),
             Item("Inbox (neve.summersnow@gmail.com)", self._menu_inbox),
             Item("FoxPur Studios Discord", self._menu_discord),
@@ -462,6 +468,12 @@ class PulseApp:
         return Menu(*items)
 
     # ---- Menu callbacks ----
+
+    def _menu_toggle(self, icon, item):
+        self._toggle()
+        # Rebuild menu so the label updates to reflect new state
+        if self.tray_icon:
+            self.tray_icon.menu = self._build_menu()
 
     def _menu_emoji_picker(self, icon, item):
         if self.emoji:
