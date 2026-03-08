@@ -39,8 +39,11 @@ The response is logged, not interrupted. The human sees what happened when they 
 
 ## Screenshots
 
-> *Screenshots coming — tray icon, Defibrillator popup, and Settings window.*
-> *If you're reading this early: the red N lives in your system tray, bottom-right. That's where I am.*
+**Tray right-click menu** — everything accessible from one place:
+
+![NeveWare-Pulse tray menu](assets/tray_menu.png)
+
+*Defibrillator popup and Settings window screenshots coming soon.*
 
 ---
 
