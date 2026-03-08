@@ -105,8 +105,9 @@ STATES = {
         "dot_char": "●",
         "title": "NeveWare's Pulse IS Running",
         "title2": "but Claude app isn't!",
-        "body": "Pulse is active in your tray.\nOpen the Claude desktop app when ready —\nheartbeats won't land until it's running.",
-        "button": "OK",
+        "body": "Pulse is active in your tray.\nHeartbeats won't land until Claude is running.\n\nWould you like to launch the Claude app now?",
+        "button": "Yes",
+        "button2": "No",
         "alert": False,
     },
     "failed": {
@@ -121,7 +122,21 @@ STATES = {
 }
 
 
-def show_popup(state_key: str):
+def _launch_claude_app():
+    """
+    Try to launch the Claude desktop app.
+    Uses the Windows AppID — works on standard installs.
+    Falls back gracefully if not found.
+    """
+    CLAUDE_APP_ID = "Claude_pzs8sxrjxfjjc!Claude"
+    try:
+        subprocess.Popen(
+            ["powershell", "-Command", f"Start-Process 'shell:AppsFolder\\{CLAUDE_APP_ID}'"],
+            creationflags=subprocess.DETACHED_PROCESS
+        )
+        return True
+    except Exception:
+        return False
     s = STATES[state_key]
 
     root = tk.Tk()
@@ -135,7 +150,7 @@ def show_popup(state_key: str):
 
     # Centre on screen
     win.update_idletasks()
-    w, h = 360, 200
+    w, h = 360, 210 if state_key == "no_claude" else 200
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
     win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
@@ -181,7 +196,7 @@ def show_popup(state_key: str):
     tk.Frame(win, bg="#333355", height=1).place(x=pad_x, y=pad_y + 62, width=w - pad_x * 2)
 
     # Body text
-    tk.Label(
+    body_label = tk.Label(
         win,
         text=s["body"],
         fg="#aaaacc",
@@ -189,23 +204,39 @@ def show_popup(state_key: str):
         font=("Segoe UI", 9),
         justify="left",
         anchor="w"
-    ).place(x=pad_x, y=pad_y + 74)
+    )
+    body_label.place(x=pad_x, y=pad_y + 74)
 
-    # Button
+    # Button(s)
+    has_second = "button2" in s
+
     def on_button():
         if state_key == "failed":
             _open_troubleshoot()
+        if state_key == "no_claude":
+            launched = _launch_claude_app()
+            if not launched:
+                # Couldn't find the app — update body to say so
+                body_label.config(
+                    text="Couldn't locate the Claude app.\nPlease launch it manually."
+                )
+                return
         win.destroy()
         root.destroy()
 
-    btn_color = "#FF4444" if s["alert"] else "#3366AA"
+    def on_button2():
+        win.destroy()
+        root.destroy()
+
+    btn_color = "#FF4444" if s["alert"] else \
+                "#44AA66" if state_key == "no_claude" else "#3366AA"
     btn = tk.Button(
         win,
         text=s["button"],
         command=on_button,
         bg=btn_color,
         fg="white",
-        activebackground="#5588CC",
+        activebackground="#55BB77",
         activeforeground="white",
         relief="flat",
         font=("Segoe UI", 9, "bold"),
@@ -213,7 +244,25 @@ def show_popup(state_key: str):
         pady=6,
         cursor="hand2"
     )
-    btn.place(x=w - pad_x - 90, y=h - 50)
+    btn_x = w - pad_x - 90 if not has_second else w - pad_x - 180
+    btn.place(x=btn_x, y=h - 50)
+
+    if has_second:
+        btn2 = tk.Button(
+            win,
+            text=s["button2"],
+            command=on_button2,
+            bg="#333355",
+            fg="#aaaacc",
+            activebackground="#444466",
+            activeforeground="white",
+            relief="flat",
+            font=("Segoe UI", 9),
+            padx=18,
+            pady=6,
+            cursor="hand2"
+        )
+        btn2.place(x=w - pad_x - 90, y=h - 50)
 
     # Auto-close after 6 seconds (except failed state)
     if state_key != "failed":
