@@ -512,32 +512,13 @@ class PulseApp:
                 if action.startswith("open_url:"):
                     url = action[len("open_url:"):]
                     if "localhost:3333" in url:
-                        # Webcam viewer — open in Chrome explicitly, camera must be on
+                        # Webcam viewer — use ShellExecute via ctypes, most reliable from pythonw
                         def _open_webcam(_, u=url):
                             def _run():
                                 import ctypes
-                                ctypes.windll.user32.MessageBoxW(
-                                    0,
-                                    "Opening webcam viewer in Chrome.\n\n"
-                                    "\u26a0\ufe0f  The camera tab must be open and camera permission granted.\n\n"
-                                    "If you see a blank page: click the camera icon in Chrome's address bar "
-                                    "and allow access, then refresh.",
-                                    "Webcam Viewer",
-                                    0x40  # MB_ICONINFORMATION
+                                ctypes.windll.shell32.ShellExecuteW(
+                                    None, "open", u, None, None, 1
                                 )
-                                # Open in Chrome explicitly — more reliable than os.startfile for localhost
-                                import subprocess
-                                chrome_paths = [
-                                    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                                    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-                                ]
-                                for chrome in chrome_paths:
-                                    if os.path.exists(chrome):
-                                        subprocess.Popen([chrome, u])
-                                        return
-                                # Fallback
-                                os.startfile(u)
                             threading.Thread(target=_run, daemon=True).start()
                         items.append(Item(label, _open_webcam))
                     else:
