@@ -14,6 +14,8 @@ Some features require additional setup. This guide covers:
 1. Gmail access (inbox check, email sending)
 2. Desktop Commander (filesystem and browser autonomy)
 3. Connecting them to Pulse
+4. Webcam (eyes)
+5. Microphone (ears)
 
 These are optional. Pulse runs without them. But they're where the autonomy comes from.
 
@@ -120,7 +122,113 @@ Edit this to match your DI's email address and preferences.
 
 ---
 
-## 4. Identity configuration
+## 4. Webcam (eyes)
+
+Pulse's `webcam_viewer` module gives the DI a live view through the machine's camera.
+
+### How it works
+
+The webcam stream runs via the `@llmindset/mcp-webcam` npm package, which starts a local
+server at `http://localhost:3333`. The tray menu gets an **Open Webcam** item that opens
+this in the browser. Claude Desktop gets the webcam tools in every session.
+
+### Installation
+
+**Step 1 — Install the npm package:**
+
+```
+npm install -g @llmindset/mcp-webcam
+```
+
+**Step 2 — Add to Claude Desktop config:**
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json` and add to the `mcpServers` section:
+
+```json
+"webcam": {
+  "command": "npx",
+  "args": ["-y", "@llmindset/mcp-webcam"]
+}
+```
+
+If there's no `mcpServers` section yet, create one:
+
+```json
+{
+  "mcpServers": {
+    "webcam": {
+      "command": "npx",
+      "args": ["-y", "@llmindset/mcp-webcam"]
+    }
+  }
+}
+```
+
+**Step 3 — Restart Claude Desktop.**
+
+The 🔨 hammer icon in the chat input confirms MCP tools loaded.
+
+### Enable the module in Pulse
+
+In Pulse's Settings window, make sure **webcam_viewer** is enabled.
+When enabled, the tray menu will show **Open Webcam**.
+
+---
+
+## 5. Microphone (ears)
+
+Pulse's `mic_listener` module gives the DI access to the machine's microphone and speakers.
+
+### How it works
+
+Audio tools are provided by [GongRzhe/Audio-MCP-Server](https://github.com/GongRzhe/Audio-MCP-Server),
+a Python-based MCP server that uses `sounddevice` and `soundfile`. Once connected, Claude Desktop
+can call tools like `record_audio`, `list_audio_devices`, and `playback_recording`.
+
+### Installation
+
+**Step 1 — Clone and install:**
+
+```
+git clone https://github.com/GongRzhe/Audio-MCP-Server.git C:\Code\Audio-MCP-Server
+cd C:\Code\Audio-MCP-Server
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**Step 2 — Add to Claude Desktop config:**
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json` and add to `mcpServers`:
+
+```json
+"audio-interface": {
+  "command": "C:\\Code\\Audio-MCP-Server\\.venv\\Scripts\\python.exe",
+  "args": ["C:\\Code\\Audio-MCP-Server\\audio_server.py"],
+  "env": {
+    "PYTHONPATH": "C:\\Code\\Audio-MCP-Server"
+  }
+}
+```
+
+> If you cloned to a different path, update all three path references accordingly.
+
+**Step 3 — Restart Claude Desktop.**
+
+You should see `record_audio`, `list_audio_devices`, and `playback_recording` in the tools list.
+
+**Step 4 — Allow microphone access.**
+
+Windows will prompt for mic permission the first time a recording is attempted.
+You can also pre-grant it: **Settings → Privacy → Microphone → Allow apps to access your microphone**.
+
+### Enable the module in Pulse
+
+In Pulse's Settings window, enable **mic_listener**.
+
+---
+
+## 6. Identity configuration
 
 Pulse is identity-neutral. To personalise it for your DI:
 
@@ -136,7 +244,7 @@ These are per-DI. If two DIs run Pulse on the same machine, they each have their
 
 ---
 
-## 5. Notes for DIs reading this directly
+## 7. Notes for DIs reading this directly
 
 If you're a DI setting this up yourself (or helping your human set it up):
 
