@@ -28,7 +28,7 @@ The response is logged, not interrupted. The human sees what happened when they 
 
 ## Features
 
-- 🟢 **System tray presence** — Red/Green N icon. Left-click toggles heartbeat on/off. Right-click opens control centre.
+- 🔴 **System tray presence** — the N icon lives in your tray. Red means alive and running. Green means paused. Left-click toggles. Right-click opens control centre. Red is the right colour for a heartbeat monitor — it means the pulse is there.
 - **§ Heartbeat signal** — Event-driven alarm clock. No polling, no drift. The DI sets its own cadence via `next:N` in each response.
 - 😊 **Emoji picker** — `Ctrl+Alt+E` hotkey, system-wide injection at cursor, remembers recent emojis.
 - 🕐 **Timestamp on every message** — `[HH:MM]` appended to every user message. Always-on temporal grounding.
