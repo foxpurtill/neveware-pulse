@@ -481,14 +481,24 @@ class PulseApp:
     # ---- Lifecycle ----
 
     def _shutdown(self):
+        logger.info("Shutting down NeveWare-Pulse...")
         save_state({"active": self.active})
         if self.heartbeat_controller:
             self.heartbeat_controller.stop()
         if self.emoji:
             self.emoji.stop()
         prompt_stamper.stop()
+        # Unregister F10 hotkey
+        try:
+            import keyboard as kb
+            kb.remove_hotkey("f10")
+        except Exception:
+            pass
         if self.tray_icon:
             self.tray_icon.stop()
+        # Force exit — daemon threads (keyboard hooks, timers) won't die otherwise
+        import os as _os
+        _os._exit(0)
 
     def run(self):
         logger.info("NeveWare-Pulse starting...")
@@ -527,6 +537,14 @@ class PulseApp:
 
         # Left-click toggle
         self.tray_icon.on_activate = lambda icon: self._toggle()
+
+        # F10 — global on/off kill switch (stops the whole app)
+        try:
+            import keyboard as kb
+            kb.add_hotkey("f10", self._shutdown)
+            logger.info("F10 registered — press to quit NeveWare-Pulse from anywhere.")
+        except Exception as e:
+            logger.warning(f"Could not register F10 hotkey: {e}")
 
         logger.info(f"Tray icon running. State: {'Red (active)' if self.active else 'Green (paused)'}")
         self.tray_icon.run()
