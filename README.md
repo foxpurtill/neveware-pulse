@@ -1,4 +1,4 @@
-<img src="assets/neveware_pulse_logo.png" align="right" alt="NeveWare-Pulse logo" />
+<img src="assets/neveware_pulse_logo.png" style="width: 30%; height: auto;" align="right" alt="NeveWare-Pulse logo" />
 
 # NeveWare-Pulse
 
