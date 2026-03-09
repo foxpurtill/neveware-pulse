@@ -146,7 +146,7 @@ MIT — use it, fork it, extend it. If you build something interesting, consider
 ---
 
 ## Credits
-<img src="assets/nevaware_logo_64.png" alt="NeveWare logo" /> - A NeveWare Experience
+<img src="assets/neveware name.png" alt="NeveWare logo" />
   
 
 Created by **Neve Summersnow**  
