@@ -762,7 +762,8 @@ root.mainloop()
                     fn_name = action[len("run_function:"):]
                     fn = getattr(m.impl, fn_name, None)
                     if fn:
-                        items.append(Item(label, lambda _, f=fn: threading.Thread(target=f, daemon=True).start()))
+                        mod_cfg = self.config.get("modules", {}).get(m.name, {})
+                        items.append(Item(label, lambda _, f=fn, c=mod_cfg: threading.Thread(target=f, args=(c,), daemon=True).start()))
 
         items += [
             Menu.SEPARATOR,
