@@ -51,7 +51,7 @@ LOG_DIR  = r"C:\Users\foxap\Documents\Neve"
 LOG_FILE = os.path.join(LOG_DIR, "heartbeat_log.txt")
 
 # How long to wait for §restart token in the Claude window (seconds)
-RESPONSE_TIMEOUT = 300  # 5 minutes
+RESPONSE_TIMEOUT = 480  # 8 minutes
 
 # How long to poll between clipboard checks (seconds)
 POLL_INTERVAL = 2
