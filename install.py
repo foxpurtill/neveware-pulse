@@ -174,17 +174,19 @@ def offer_startup_task():
         if not TASK_SCRIPT.exists():
             fail(f"register_task.ps1 not found at {TASK_SCRIPT}")
             return
+        # Use -Command with & call operator to avoid path quoting issues
+        ps_command = f'& "{TASK_SCRIPT}"'
         result = subprocess.run(
-            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(TASK_SCRIPT)],
+            ["powershell", "-ExecutionPolicy", "Bypass", "-Command", ps_command],
             capture_output=True, text=True
         )
         if result.returncode == 0:
             ok("Startup task registered. NeveWare-Pulse will launch at login.")
         else:
-            fail(f"Task registration failed:\n{result.stderr}")
-            info("You can run register_task.ps1 manually as Administrator.")
+            fail(f"Task registration failed:\n{result.stderr or result.stdout}")
+            info("You can also right-click register_task.ps1 and choose 'Run with PowerShell'.")
     else:
-        info("Skipped. Run register_task.ps1 manually when ready.")
+        info("Skipped. To register later: right-click register_task.ps1 → Run with PowerShell.")
 
 
 def main():
@@ -201,7 +203,7 @@ def main():
 
     print(f"\n{GREEN}{BOLD}Installation complete.{RESET}")
     print("Run NeveWare-Pulse:")
-    print(f"  pythonw {BASE_DIR / 'tray_app.py'}")
+    print(f"  python launcher.pyw")
     print()
 
 
