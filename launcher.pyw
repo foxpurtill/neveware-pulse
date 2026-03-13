@@ -82,6 +82,16 @@ def is_claude_running() -> bool:
         return False
 
 
+def _load_config() -> dict:
+    """Load config.json from the Pulse directory."""
+    config_path = Path(BASE_DIR) / "config.json"
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 def launch_pulse() -> bool:
     """Launch tray_app.py with pythonw. Returns True on success."""
     try:
@@ -89,8 +99,15 @@ def launch_pulse() -> bool:
         pythonw = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
         if not os.path.exists(pythonw):
             pythonw = python_exe
+
+        cfg = _load_config()
+        restore_last = cfg.get("defib_restore_last_state", True)
+        args = [pythonw, TRAY_SCRIPT]
+        if not restore_last:
+            args.append("--paused")
+
         subprocess.Popen(
-            [pythonw, TRAY_SCRIPT],
+            args,
             cwd=BASE_DIR,
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         )

@@ -146,6 +146,17 @@ def stop():
     _unregister_hook()
 
 
+def stop_no_unhook():
+    """Stop the prompt stamper without calling unhook_all.
+    Used during full shutdown where _os._exit(0) handles cleanup —
+    avoids killing other keyboard hooks (e.g. F10) mid-execution."""
+    global _active, _hook_registered
+    with _lock:
+        _active = False
+        _hook_registered = False
+    logger.info("prompt_stamper: stopped (no unhook — process exiting).")
+
+
 def pause():
     """Suspend timestamping — UNREGISTERS the hook so Enter works normally everywhere."""
     global _active
@@ -161,5 +172,4 @@ def resume():
     with _lock:
         _active = True
     _register_hook()
-    logger.info("prompt_stamper: resumed (Fox away).")
     logger.info("prompt_stamper: resumed (Fox away).")

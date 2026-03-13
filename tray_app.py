@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import pystray
 from pystray import MenuItem as Item, Menu
+import keyboard
 
 import neve_bridge
 import heartbeat as hb
@@ -57,7 +58,9 @@ DEFAULT_CONFIG = {
     "default_interval_minutes": 30,
     "emoji_hotkey": "ctrl+alt+e",
     "recent_emoji": [],
-    "modules": {}
+    "modules": {},
+    "heartbeat_prompts": [],  # Empty = use built-in defaults. Populate to override.
+    "defib_restore_last_state": True  # True = restore saved state after Defibrillator recovery. False = always start paused (Green).
 }
 
 
@@ -332,6 +335,18 @@ def open_settings(config: dict, modules: list[ModuleInfo], on_save):
         row=row_offset + 1, column=1, sticky="w", padx=8)
     row_offset += 2
 
+    # Defib restore state toggle
+    defib_restore_var = tk.BooleanVar(value=config.get("defib_restore_last_state", True))
+    tk.Checkbutton(
+        win,
+        text="Restore last state after Defibrillator recovery",
+        variable=defib_restore_var,
+        bg=bg, fg=fg, selectcolor=entry_bg,
+        activebackground=bg, activeforeground=fg,
+        font=("Segoe UI", 9)
+    ).grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 2))
+    row_offset += 1
+
     # Desktop Commander notice
     dc_note = tk.Label(
         win,
@@ -353,6 +368,7 @@ def open_settings(config: dict, modules: list[ModuleInfo], on_save):
                 config[key] = val
         # Advanced: Claude app path (empty string = use auto-detect)
         config["claude_app_path"] = claude_path_var.get().strip()
+        config["defib_restore_last_state"] = defib_restore_var.get()
         for mod_name, var in mod_enabled.items():
             if "modules" not in config:
                 config["modules"] = {}
@@ -431,6 +447,11 @@ class PulseApp:
         state = load_state()
         self.active = state.get("active", True)  # True = Red (Fox away / heartbeat on)
 
+        # If launched with --paused (e.g. Defibrillator with restore_last_state=False),
+        # override saved state and start Green regardless.
+        if "--paused" in sys.argv:
+            self.active = False
+
         self.modules: list[ModuleInfo] = []
         self.tray_icon: pystray.Icon | None = None
         self.heartbeat_controller: hb.HeartbeatController | None = None
@@ -483,6 +504,71 @@ class PulseApp:
 
         status = "Red (Fox away — heartbeat active)" if self.active else "Green (Fox present — heartbeat paused, modules running)"
         logger.info(f"State toggled: {status}")
+
+        # Re-register both hotkeys after every toggle
+        self._register_hotkeys()
+
+    def _register_hotkeys(self):
+        """Register (or re-register) F1 and F10. Safe to call multiple times."""
+        for key in ("f1", "f10"):
+            try:
+                keyboard.remove_hotkey(key)
+            except Exception:
+                pass
+        try:
+            keyboard.add_hotkey("f1", self._toggle)
+        except Exception as e:
+            logger.warning(f"F1 registration failed: {e}")
+        try:
+            keyboard.add_hotkey("f10", self._shutdown)
+        except Exception as e:
+            logger.warning(f"F10 registration failed: {e}")
+
+        self._show_toggle_toast(self.active)
+
+    def _show_toggle_toast(self, active: bool):
+        """Brief popup confirming F1 toggle — uses a subprocess to avoid tkinter root conflicts."""
+        import threading
+        import subprocess
+        import sys
+
+        label = "Pulse Started" if active else "Pulse Paused"
+        dot   = "R" if active else "G"   # passed as arg, emoji rendered inside script
+
+        script = r"""
+import sys, tkinter as tk, time
+active = sys.argv[1] == "R"
+dot   = "\U0001f534" if active else "\U0001f7e2"
+label = "Pulse Started" if active else "Pulse Paused"
+bg    = "#2a0a0a" if active else "#0a2a0a"
+fg    = "#ff6666" if active else "#66ff99"
+root = tk.Tk()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
+root.attributes("-alpha", 0.88)
+tk.Label(root, text=f"  {dot}  {label}  ",
+         font=("Segoe UI", 13, "bold"),
+         bg=bg, fg=fg, padx=12, pady=8).pack()
+root.update_idletasks()
+sw = root.winfo_screenwidth()
+sh = root.winfo_screenheight()
+w  = root.winfo_width()
+h  = root.winfo_height()
+root.geometry(f"+{sw - w - 24}+{sh - h - 72}")
+root.after(3500, root.destroy)
+root.mainloop()
+"""
+
+        def _run():
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-c", script, dot],
+                    creationflags=0x08000000   # CREATE_NO_WINDOW
+                )
+            except Exception as e:
+                logger.warning(f"Toast subprocess failed: {e}")
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ---- Module loading ----
 
@@ -602,13 +688,10 @@ class PulseApp:
             self.heartbeat_controller.stop()
         if self.emoji:
             self.emoji.stop()
-        prompt_stamper.stop()
-        # Unregister F10 hotkey
-        try:
-            import keyboard as kb
-            kb.remove_hotkey("f10")
-        except Exception:
-            pass
+        # Stop prompt stamper WITHOUT calling unhook_all — that would kill F10's
+        # own hook mid-execution and prevent clean shutdown when Red (hook active).
+        # _os._exit(0) below will tear down everything anyway.
+        prompt_stamper.stop_no_unhook()
         if self.tray_icon:
             self.tray_icon.stop()
         # Show "killed" popup via launcher before exiting
@@ -630,7 +713,8 @@ class PulseApp:
             pid_file.unlink(missing_ok=True)
         except Exception:
             pass
-        # Force exit — daemon threads (keyboard hooks, timers) won't die otherwise
+        # Force exit — _os._exit(0) kills all threads, hooks, and timers cleanly.
+        # No need to unhook_all first — that races with F10's own hook execution.
         import os as _os
         _os._exit(0)
 
@@ -682,22 +766,9 @@ class PulseApp:
         # Left-click toggle
         self.tray_icon.on_activate = lambda icon: self._toggle()
 
-        # F1 — pause/resume heartbeat (app stays running, modules stay active)
-        # Email watcher also suspends when heartbeat is paused (Fox is present)
-        try:
-            import keyboard as kb
-            kb.add_hotkey("f1", self._toggle)
-            logger.info("F1 registered — press to pause/resume heartbeat from anywhere.")
-        except Exception as e:
-            logger.warning(f"Could not register F1 hotkey: {e}")
-
-        # F10 — full app kill
-        try:
-            import keyboard as kb
-            kb.add_hotkey("f10", self._shutdown)
-            logger.info("F10 registered — press to quit NeveWare-Pulse from anywhere.")
-        except Exception as e:
-            logger.warning(f"Could not register F10 hotkey: {e}")
+        # Register F1 and F10 hotkeys
+        self._register_hotkeys()
+        logger.info("F1 (pause/resume) and F10 (quit) registered.")
 
         logger.info(f"Tray icon running. State: {'Red (active)' if self.active else 'Green (paused)'}")
         self.tray_icon.run()

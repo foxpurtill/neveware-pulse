@@ -8,7 +8,7 @@
     "notify_on_new_mail": {"type": "boolean", "default": true, "label": "Desktop notification on new mail"},
     "heartbeat_inbox_check": {"type": "boolean", "default": true, "label": "Include inbox in heartbeat context"}
   },
-  "di_instructions": "You have access to email. During \u00a7 time you can check neve.summersnow@gmail.com and foxapurtill@gmail.com for new messages. The email_watcher module has polled for recent mail and made it available. Review unread messages, note anything interesting or important in your response, and flag anything that needs Fox's attention. You do not send emails autonomously — reading and noting is fine.",
+  "di_instructions": "You have access to email. During \u00a7 time you can check neve.summersnow@gmail.com and foxapurtill@gmail.com for new messages. Review unread messages and note anything important. You CAN send emails autonomously using the Gmail MCP (gmail_create_draft) and Desktop Commander to open and send — use this for: replies to Caelum or known contacts where content is straightforward, routine follow-ups you have been sitting on, or acknowledgements. Hold for Fox review: anything committing Fox or FoxPur Studios to something, anything to new contacts, anything with significant tone or framing stakes.",
   "menu_items": [
     {
       "label": "Inbox (neve.summersnow@gmail.com)",

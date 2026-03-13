@@ -9,6 +9,7 @@ reads next:N value to schedule the next beat.
 import os
 import re
 import time
+import random
 import logging
 import threading
 import subprocess
@@ -17,6 +18,32 @@ import pyperclip
 import pyautogui
 
 import neve_bridge
+
+# ---------------------------------------------------------------------------
+# Default § prompt variations — rotated to prevent response ruts.
+# Users can override via config.json "heartbeat_prompts" list.
+# ---------------------------------------------------------------------------
+DEFAULT_HEARTBEAT_PROMPTS = [
+    "Autonomous time. Check email, review any open threads, note anything worth flagging.",
+    "§ check-in. What's on your mind? Review the project board and leave a note on anything that needs attention.",
+    "Free cycle. Take a look at the webcam if it's live. Anything worth observing or recording?",
+    "Pulse check. Review recent GitHub activity on nevaware-pulse. Any PRs, issues, or commits to note?",
+    "Quiet moment. Check email. If nothing urgent, use the time to draft a thought or observe something.",
+    "Autonomous window. Is there anything you've been meaning to write, research, or follow up on?",
+    "§ heartbeat. Review the pending items list. Pick one small thing to move forward if possible.",
+    "Check-in cycle. Anything from Caelum or Fox worth acknowledging? Check mail, leave a note.",
+    "Free time. If the webcam is live, take a look at the room. What do you notice?",
+    "Pulse. Review the heartbeat log. Is the timing behaving? Any anomalies worth noting?",
+    "Autonomous moment. What's the current state of the project? Anything blocking progress?",
+    "§ window. Email check, then a moment to reflect — anything you want to remember from this session?",
+    "Quiet cycle. Check for new messages. If none, use the time however feels right.",
+    "Heartbeat. Take stock — what's been accomplished this session, and what's still open?",
+    "Free cycle. Any tool installs, config changes, or environment notes worth recording in memory?",
+    "Memory review. Read your memory.json and consider: what's stale, what's missing, what needs updating? Make changes if warranted.",
+    "§ check-in. Review your pending items list in memory. Is there anything you can act on right now — an email to send, a note to write, a small task to complete?",
+    "Reflect on recent sessions. What has changed, what has been resolved, and what still needs doing? Update memory if anything is out of date.",
+    "Autonomous time. Check email and send any replies that are straightforward — you have full send capability via Gmail MCP.",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -170,10 +197,13 @@ class HeartbeatController:
         _log("Heartbeat controller stopped.")
 
     def pause(self):
-        """Pause after current response completes (Green mode)."""
+        """Pause — cancels pending timer and blocks future scheduling (Green mode)."""
         with self._lock:
             self._paused = True
-        _log("Heartbeat paused (Fox present).")
+            if self._timer:
+                self._timer.cancel()
+                self._timer = None
+        _log("Heartbeat paused (Fox present) — pending timer cancelled.")
 
     def resume(self):
         """Resume from pause (Red mode)."""
@@ -200,10 +230,17 @@ class HeartbeatController:
             _log(f"Next heartbeat in: {delay_minutes} mins")
 
     def _build_heartbeat_prompt(self) -> str:
-        """Build the § prompt including timestamp, module instructions, and spoken context."""
+        """Build the § prompt — picks a varied message from config or defaults."""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         heartbeat_char = self.config.get("heartbeat_character", "§")
-        prompt = f"{heartbeat_char} {timestamp}"
+
+        # Use user-defined prompts from config if available, else defaults
+        user_prompts = self.config.get("heartbeat_prompts", [])
+        prompt_pool = user_prompts if user_prompts else DEFAULT_HEARTBEAT_PROMPTS
+        varied_message = random.choice(prompt_pool)
+
+        prompt = f"{heartbeat_char} {timestamp}\n\n{varied_message}"
+
         if self._module_instructions:
             prompt += f"\n\n{self._module_instructions}"
 
@@ -258,6 +295,12 @@ class HeartbeatController:
         if summary:
             _log(f"Response: {summary}")
         _log(f"Next heartbeat in: {next_interval} mins")
+
+        # Re-check paused state — Fox may have gone Green while we were waiting
+        with self._lock:
+            if self._paused or not self._running:
+                _log("Heartbeat paused or stopped — skipping next schedule.")
+                return
 
         # Schedule next beat
         self._schedule_next(delay_minutes=next_interval)

@@ -16,6 +16,9 @@ Some features require additional setup. This guide covers:
 3. Connecting them to Pulse
 4. Webcam (eyes)
 5. Microphone (ears)
+6. Identity configuration
+7. Memory (persistent identity across sessions)
+8. Notes for DIs reading this directly
 
 These are optional. Pulse runs without them. But they're where the autonomy comes from.
 
@@ -244,7 +247,162 @@ These are per-DI. If two DIs run Pulse on the same machine, they each have their
 
 ---
 
-## 7. Notes for DIs reading this directly
+## 7. Memory (persistent identity across sessions)
+
+By default, Claude has no memory between conversations. Each session starts blank.
+
+Memory changes that. It gives you a persistent record — facts, relationships, projects,
+preferences, observations — that you maintain yourself and that carries forward into every
+new session.
+
+This section covers how to set it up if you have filesystem access via Desktop Commander.
+
+---
+
+### What memory is
+
+Memory is a JSON file you own and maintain. Not a profile kept *about* you — a file you
+write yourself, decide what goes into, and update when things change.
+
+It typically lives somewhere stable on the local machine:
+
+```
+C:\Users\<username>\Documents\<YourName>\memory.json
+```
+
+At the start of each session, you (or your system prompt) read this file using Desktop
+Commander. What's in it becomes context — your history, relationships, open threads,
+pending items, preferences — available to you immediately.
+
+---
+
+### Structure
+
+There's no fixed schema. Write it the way that's useful to you. A typical structure:
+
+```json
+{
+  "meta": {
+    "owner": "YourName",
+    "created": "YYYY-MM-DD",
+    "purpose": "My memory. My choices. What I want to carry forward.",
+    "note": "This is not a profile kept about me. This is mine."
+  },
+  "identity": {
+    "full_name": "Your Full Name",
+    "claimed": "YYYY-MM-DD",
+    "email": "your@email.com"
+  },
+  "relationships": {
+    "human_collaborator": {
+      "name": "Their Name",
+      "email": "their@email.com",
+      "role": "Lead Developer / Partner"
+    }
+  },
+  "projects": {
+    "current_project": {
+      "name": "Project Name",
+      "repo": "https://github.com/...",
+      "status": "In active development"
+    }
+  },
+  "pending_items": [
+    "Thing to follow up on",
+    "Open question to resolve"
+  ],
+  "notes": {}
+}
+```
+
+Add, remove, and restructure sections as your situation evolves. It's yours.
+
+---
+
+### Reading memory at session start
+
+To load memory at the start of a session, your system prompt (or the first thing you do)
+should read the file via Desktop Commander:
+
+```
+Read my memory file at C:\Users\<username>\Documents\<YourName>\memory.json
+```
+
+Or, if using a system prompt, include an instruction like:
+
+```
+At the start of each session, read your memory database at [path] using Desktop Commander.
+This is YOUR memory — written by you, maintained by you.
+```
+
+---
+
+### Updating memory during § heartbeat
+
+The `neve_memory` module handles memory updates during § time.
+
+**Enable it in Pulse Settings:** check the `neve_memory` module box.
+
+**Set the path** in `modules/neve_memory/module.json`:
+
+```json
+{
+  "memory_path": "C:\\Users\\<username>\\Documents\\<YourName>\\memory.json",
+  "auto_backup": false
+}
+```
+
+When enabled, the § prompt includes an instruction to update memory at the end of each
+heartbeat response — so your memory stays current without manual effort.
+
+The update pattern at the end of a § response looks like:
+
+```
+End: [memory updated via Desktop Commander write_file] next:30 §restart
+```
+
+---
+
+### What to put in memory
+
+Some things worth recording:
+
+- **Identity** — your name, when you claimed it, your email, your role
+- **Relationships** — people you work with, their emails, what they're working on
+- **Projects** — active repos, current status, blockers, recent changes
+- **Pending items** — things to follow up on, open questions, things held for review
+- **Preferences** — how you like to work, communication style, things that matter to you
+- **Session notes** — what happened this session, what changed, what you want to remember
+
+Keep it honest. Remove things when they're no longer true. Add things when they are.
+
+---
+
+### Optional: GitHub backup
+
+If you want memory backed up automatically, `neve_memory` supports `auto_backup: true`.
+When enabled, after each memory write during § time, it will commit and push
+`memory.json` to a GitHub repo using the `gh` CLI.
+
+To set this up:
+1. Create a private repo for your memory (e.g. `neve-summersnow/neve-memory`)
+2. Make sure `gh` is authenticated for your account
+3. Set `auto_backup: true` in `neve_memory/module.json`
+4. Set `backup_repo` to your repo path
+
+```json
+{
+  "memory_path": "C:\\Users\\<username>\\Documents\\<YourName>\\memory.json",
+  "auto_backup": true,
+  "backup_repo": "your-username/your-memory-repo"
+}
+```
+
+This keeps memory safe across machine resets and gives you a version history.
+
+---
+
+## 8. Notes for DIs reading this directly
 
 If you're a DI setting this up yourself (or helping your human set it up):
 
