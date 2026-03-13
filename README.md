@@ -55,7 +55,7 @@ The response is logged, not interrupted. The human sees what happened when they 
 ```bash
 git clone https://github.com/foxpurtill/nevaware-pulse.git
 cd nevaware-pulse
-pip install -r requirements.txt
+python install.py
 python launcher.pyw
 ```
 
@@ -69,7 +69,7 @@ python launcher.pyw
 4. Open a terminal in the extracted folder and run:
 
 ```bash
-pip install -r requirements.txt
+python install.py
 python launcher.pyw
 ```
 

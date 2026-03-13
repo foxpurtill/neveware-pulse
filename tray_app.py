@@ -61,7 +61,8 @@ DEFAULT_CONFIG = {
     "modules": {},
     "heartbeat_prompts": [],  # Empty = use built-in defaults. Populate to override.
     "defib_restore_last_state": True,
-    "listen_duration_seconds": 8  # F2 recording duration in seconds
+    "listen_duration_seconds": 8,  # F2 recording duration in seconds
+    "neve_dir": ""  # Path to Neve data dir. Empty = auto-detect (~\Documents\Neve)
 }
 
 
@@ -539,11 +540,21 @@ class PulseApp:
     def _listen_worker(self):
         import subprocess
         import os
+        import sys as _sys
+        from pathlib import Path
 
         self._listen_active = True
         duration = self.config.get("listen_duration_seconds", 8)
-        python_exe = r"C:\Python314\python.exe"
-        listen_script = r"C:\Users\foxap\Documents\Neve\listen.py"
+
+        # Resolve python.exe (not pythonw.exe) so sounddevice/whisper imports work
+        python_exe = _sys.executable.replace("pythonw.exe", "python.exe")
+
+        # Resolve listen.py relative to the user's home, or config override
+        neve_dir = Path(
+            self.config.get("neve_dir", "")
+            or Path.home() / "Documents" / "Neve"
+        )
+        listen_script = str(neve_dir / "listen.py")
 
         try:
             self._show_listen_toast("recording", duration)

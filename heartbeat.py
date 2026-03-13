@@ -14,6 +14,7 @@ import logging
 import threading
 import subprocess
 import datetime
+from pathlib import Path
 import pyperclip
 import pyautogui
 
@@ -47,7 +48,7 @@ DEFAULT_HEARTBEAT_PROMPTS = [
 
 logger = logging.getLogger(__name__)
 
-LOG_DIR  = r"C:\Users\foxap\Documents\Neve"
+LOG_DIR  = str(Path.home() / "Documents" / "Neve")
 LOG_FILE = os.path.join(LOG_DIR, "heartbeat_log.txt")
 
 # How long to wait for §restart token in the Claude window (seconds)
@@ -259,7 +260,7 @@ class HeartbeatController:
             # Fallback: check voice_log.db directly from listen.py (no module needed)
             try:
                 import sys as _sys
-                _neve_dir = r"C:\Users\foxap\Documents\Neve"
+                _neve_dir = str(Path.home() / "Documents" / "Neve")
                 if _neve_dir not in _sys.path:
                     _sys.path.insert(0, _neve_dir)
                 import listen as _listen

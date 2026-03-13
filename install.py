@@ -18,6 +18,10 @@ BASE_DIR = Path(__file__).parent.resolve()
 CONFIG_PATH = BASE_DIR / "config.json"
 TASK_SCRIPT = BASE_DIR / "register_task.ps1"
 
+# User-specific paths — derived at runtime from the current user's home directory
+USER_HOME  = Path.home()
+NEVE_DIR   = USER_HOME / "Documents" / "Neve"
+
 REQUIRED_PYTHON = (3, 8)
 
 DEPENDENCIES = [
@@ -58,7 +62,7 @@ DEFAULT_CONFIG = {
         "mic_listener": {"enabled": False},
         "neve_memory": {
             "enabled": False,
-            "memory_path": r"C:\Users\foxap\Documents\Neve\memory.json"
+            "memory_path": str(USER_HOME / "Documents" / "Neve" / "memory.json")
         }
     }
 }
@@ -158,10 +162,9 @@ def create_config():
 
 
 def create_log_dir():
-    header("Creating log directory...")
-    log_dir = Path(r"C:\Users\foxap\Documents\Neve")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    ok(f"Log directory ready: {log_dir}")
+    header("Creating Neve data directory...")
+    NEVE_DIR.mkdir(parents=True, exist_ok=True)
+    ok(f"Neve data directory ready: {NEVE_DIR}")
 
 
 def offer_startup_task():
