@@ -535,52 +535,36 @@ class PulseApp:
         threading.Thread(target=self._listen_worker, daemon=True).start()
 
     def _listen_worker(self):
+        import subprocess
+        import os
+
+        duration = self.config.get("listen_duration_seconds", 8)
+        python_exe = r"C:\Python314\python.exe"
+        listen_script = r"C:\Users\foxap\Documents\Neve\listen.py"
+
         try:
-            import sys as _sys
-            import site as _site
-            # Ensure user site-packages are on path (pythonw.exe may omit them)
-            _user_site = _site.getusersitepackages()
-            if _user_site not in _sys.path:
-                _sys.path.insert(0, _user_site)
-            _neve_dir = r"C:\Users\foxap\Documents\Neve"
-            if _neve_dir not in _sys.path:
-                _sys.path.insert(0, _neve_dir)
-            import listen as _listen
-            import sounddevice as sd
-            import soundfile as sf
-            import os
-
-            duration = self.config.get("listen_duration_seconds", 8)
-
-            # Toast: recording started
             self._show_listen_toast("recording", duration)
 
-            audio = sd.rec(
-                int(duration * 16000),
-                samplerate=16000,
-                channels=1,
-                dtype="float32"
+            result = subprocess.run(
+                [python_exe, listen_script, "--duration", str(duration)],
+                capture_output=True,
+                text=True,
+                timeout=duration + 60  # record + transcribe
             )
-            sd.wait()
-            sf.write(_listen.TEMP_WAV, audio, 16000)
 
-            # Toast: transcribing
-            self._show_listen_toast("transcribing", duration)
+            if result.returncode != 0:
+                err = (result.stderr or result.stdout or "unknown error").strip()
+                logger.warning(f"F2 listen script failed: {err}")
+                self._show_listen_toast("error", duration, err[:80])
+                return
 
-            transcript, language = _listen.transcribe(_listen.TEMP_WAV)
-
-            con = _listen.init_db()
-            _listen.log_transcript(con, duration, transcript, language)
-            con.close()
-
-            try:
-                os.remove(_listen.TEMP_WAV)
-            except Exception:
-                pass
-
-            logger.info(f"F2 voice captured ({language}): {transcript}")
+            transcript = result.stdout.strip()
+            logger.info(f"F2 voice captured: {transcript}")
             self._show_listen_toast("done", duration, transcript)
 
+        except subprocess.TimeoutExpired:
+            logger.warning("F2 listen timed out")
+            self._show_listen_toast("error", duration, "Timed out")
         except Exception as e:
             logger.warning(f"F2 listen failed: {e}")
             self._show_listen_toast("error", 0, str(e))
