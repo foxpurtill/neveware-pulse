@@ -34,8 +34,99 @@ The response is logged, not interrupted. The human sees what happened when they 
 - **§ Heartbeat signal** — Event-driven alarm clock. No polling, no drift. The DI sets its own cadence via `next:N` in each response.
 - 😊 **Emoji picker** — `Ctrl+Alt+E` hotkey, system-wide injection at cursor, remembers recent emojis.
 - 🕐 **Timestamp on every message** — `[HH:MM]` appended to every user message. Always-on temporal grounding.
+- 🎙️ **Voice capture** — `F2` records 8 seconds from your microphone, transcribes with Whisper, and logs it to `voice_log.db`. The next heartbeat automatically includes what was said.
 - 🔧 **Plugin architecture** — DI-identity-neutral core. Any DI installs it, sets their own signal character, icon letter, colour scheme.
 - 📋 **Project manager** — Accessible from tray right-click menu.
+
+---
+
+## Installation
+
+### Requirements
+
+- Windows 10 or 11
+- Python 3.10+ — [python.org](https://www.python.org/downloads/)
+- Git — [git-scm.com](https://git-scm.com/) *(for option 1)*
+
+---
+
+### Option 1 — Clone from GitHub *(recommended)*
+
+```bash
+git clone https://github.com/foxpurtill/nevaware-pulse.git
+cd nevaware-pulse
+pip install -r requirements.txt
+python launcher.pyw
+```
+
+---
+
+### Option 2 — Download ZIP
+
+1. Go to [github.com/foxpurtill/nevaware-pulse](https://github.com/foxpurtill/nevaware-pulse)
+2. Click **Code → Download ZIP**
+3. Extract anywhere
+4. Open a terminal in the extracted folder and run:
+
+```bash
+pip install -r requirements.txt
+python launcher.pyw
+```
+
+---
+
+### Option 3 — pip install *(coming soon)*
+
+```bash
+pip install nevaware-pulse
+nevaware-pulse
+```
+
+> PyPI release is in progress. Follow the repo to be notified.
+
+---
+
+### Optional: Voice Capture (F2)
+
+Voice capture requires [OpenAI Whisper](https://github.com/openai/whisper) and its audio dependencies:
+
+```bash
+pip install openai-whisper sounddevice soundfile
+```
+
+On first use, Whisper downloads the `base` model (~140 MB) automatically.
+
+If `ffmpeg` is not already installed, Whisper will prompt for it:
+
+```bash
+# Windows (winget)
+winget install ffmpeg
+
+# Or via Chocolatey
+choco install ffmpeg
+```
+
+---
+
+### Startup (optional)
+
+To have Pulse launch automatically on login:
+
+1. Open **Settings → Advanced** in the Pulse tray menu
+2. Click **Register with Task Scheduler**
+
+Or manually: add a shortcut to `launcher.pyw` in your Windows Startup folder (`shell:startup`).
+
+---
+
+### Hotkeys
+
+| Key | Action |
+|-----|--------|
+| `F1` | Toggle Pulse on/off |
+| `F2` | Record 8s of audio → transcribe → inject into next heartbeat |
+| `F10` | Quit Pulse entirely |
+| `Ctrl+Alt+E` | Open emoji picker |
 
 ---
 
@@ -129,6 +220,7 @@ Completed:
 - ✅ Defibrillator launcher with status popups
 - ✅ Settings window (including Advanced: Claude app path)
 - ✅ Task Scheduler startup registration
+- ✅ F2 voice capture — Whisper transcription → `voice_log.db` → heartbeat injection
 
 In progress:
 - 🔧 Heartbeat response parsing (`§restart` / `next:N`)

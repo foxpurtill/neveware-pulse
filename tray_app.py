@@ -530,14 +530,17 @@ class PulseApp:
             logger.warning(f"F10 registration failed: {e}")
 
     def _listen(self):
-        """F2 — record 8 seconds of audio, transcribe with Whisper, log to voice_log.db."""
+        """F2 — record audio. Debounced: ignores re-press while a recording is in progress."""
         import threading
+        if getattr(self, "_listen_active", False):
+            return  # already recording, ignore
         threading.Thread(target=self._listen_worker, daemon=True).start()
 
     def _listen_worker(self):
         import subprocess
         import os
 
+        self._listen_active = True
         duration = self.config.get("listen_duration_seconds", 8)
         python_exe = r"C:\Python314\python.exe"
         listen_script = r"C:\Users\foxap\Documents\Neve\listen.py"
@@ -548,17 +551,16 @@ class PulseApp:
             result = subprocess.run(
                 [python_exe, listen_script, "--duration", str(duration)],
                 capture_output=True,
-                text=True,
-                timeout=duration + 60  # record + transcribe
+                timeout=duration + 60
             )
 
             if result.returncode != 0:
-                err = (result.stderr or result.stdout or "unknown error").strip()
+                err = (result.stderr or result.stdout or b"unknown error").decode("utf-8", errors="replace").strip()
                 logger.warning(f"F2 listen script failed: {err}")
                 self._show_listen_toast("error", duration, err[:80])
                 return
 
-            transcript = result.stdout.strip()
+            transcript = result.stdout.decode("utf-8", errors="replace").strip()
             logger.info(f"F2 voice captured: {transcript}")
             self._show_listen_toast("done", duration, transcript)
 
@@ -568,45 +570,64 @@ class PulseApp:
         except Exception as e:
             logger.warning(f"F2 listen failed: {e}")
             self._show_listen_toast("error", 0, str(e))
+        finally:
+            self._listen_active = False
 
     def _show_listen_toast(self, state: str, duration: float, text: str = ""):
-        """Toast for F2 voice recording states."""
+        """Toast for F2 voice recording states. Writes script to temp file to avoid encoding issues."""
         import threading
         import subprocess
         import sys
+        import tempfile
+        import os
 
-        messages = {
-            "recording": (f"🎙️  Recording {int(duration)}s...", "#0a1a2a", "#66aaff"),
-            "transcribing": ("⏳  Transcribing...", "#1a0a2a", "#aa66ff"),
-            "done": (f"✅  {text[:60]}{'…' if len(text) > 60 else ''}", "#0a2a0a", "#66ff99"),
-            "error": (f"❌  {text[:60]}", "#2a0a0a", "#ff6666"),
+        labels = {
+            "recording":   (f"Recording {int(duration)}s...", "#0a1a2a", "#66aaff"),
+            "transcribing": ("Transcribing...",               "#1a0a2a", "#aa66ff"),
+            "done":        (text[:70] if text else "Done",    "#0a2a0a", "#66ff99"),
+            "error":       (text[:70] if text else "Error",   "#2a0a0a", "#ff6666"),
         }
-        msg, bg, fg = messages.get(state, ("...", "#1a1a2e", "#ffffff"))
+        msg, bg, fg = labels.get(state, ("...", "#1a1a2e", "#ffffff"))
+        # Sanitise msg for embedding in a Python string literal
+        msg_safe = msg.replace("\\", "\\\\").replace('"', '\\"')
         delay = 6000 if state in ("done", "error") else 60000
 
-        script = f"""
-import tkinter as tk
-root = tk.Tk()
-root.overrideredirect(True)
-root.attributes("-topmost", True)
-root.attributes("-alpha", 0.88)
-tk.Label(root, text="  {msg}  ", font=("Segoe UI", 11, "bold"),
-         bg="{bg}", fg="{fg}", padx=12, pady=8).pack()
-root.update_idletasks()
-sw = root.winfo_screenwidth()
-sh = root.winfo_screenheight()
-root.geometry(f"+{{sw - root.winfo_width() - 24}}+{{sh - root.winfo_height() - 110}}")
-root.after({delay}, root.destroy)
-root.mainloop()
-"""
+        script = (
+            "import tkinter as tk\n"
+            "root = tk.Tk()\n"
+            "root.overrideredirect(True)\n"
+            "root.attributes('-topmost', True)\n"
+            "root.attributes('-alpha', 0.88)\n"
+            f'tk.Label(root, text="  {msg_safe}  ", font=("Segoe UI", 11, "bold"),\n'
+            f'         bg="{bg}", fg="{fg}", padx=12, pady=8).pack()\n'
+            "root.update_idletasks()\n"
+            "sw = root.winfo_screenwidth()\n"
+            "sh = root.winfo_screenheight()\n"
+            "root.geometry(f'+{sw - root.winfo_width() - 24}+{sh - root.winfo_height() - 110}')\n"
+            f"root.after({delay}, root.destroy)\n"
+            "root.mainloop()\n"
+        )
+
         def _run():
+            tmp = None
             try:
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, encoding="utf-8"
+                )
+                tmp.write(script)
+                tmp.close()
                 subprocess.Popen(
-                    [sys.executable, "-c", script],
+                    [sys.executable, tmp.name],
                     creationflags=0x08000000
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Listen toast failed: {e}")
+                if tmp and os.path.exists(tmp.name):
+                    try:
+                        os.remove(tmp.name)
+                    except Exception:
+                        pass
+
         threading.Thread(target=_run, daemon=True).start()
 
     def _show_toggle_toast(self, active: bool):
