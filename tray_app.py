@@ -537,6 +537,11 @@ class PulseApp:
     def _listen_worker(self):
         try:
             import sys as _sys
+            import site as _site
+            # Ensure user site-packages are on path (pythonw.exe may omit them)
+            _user_site = _site.getusersitepackages()
+            if _user_site not in _sys.path:
+                _sys.path.insert(0, _user_site)
             _neve_dir = r"C:\Users\foxap\Documents\Neve"
             if _neve_dir not in _sys.path:
                 _sys.path.insert(0, _neve_dir)
