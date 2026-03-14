@@ -1,13 +1,25 @@
 {
   "icon_letter": "N",
+  "ai_name": "Neve",
   "active_color": "#44BB44",
   "inactive_color": "#FF4444",
   "heartbeat_character": "§",
   "default_interval_minutes": 5,
+  "heartbeat_prompts": [],
+  "neve_dir": "C:\\Users\\susur\\lux",
+  "memory_path": "",
+  "claude_app_path": "",
+  "email_address": "neve.summersnow@gmail.com",
+  "gmail_token_path": "",
+  "listen_duration_seconds": 8,
+  "ffplay_path": "",
+  "elevenlabs_voice_id": "21m00Tcm4TlvDq8ikWAM",
+  "elevenlabs_api_key": "752ff869242c6e153c2c2ea81bc40be3abc4cf0a4be1fc8683b7b5790c28ef52",
   "emoji_hotkey": "ctrl+alt+e",
   "recent_emoji": [
     "😀"
   ],
+  "defib_restore_last_state": false,
   "modules": {
     "email_watcher": {
       "enabled": true,
@@ -47,12 +59,5 @@
       "voice_id": "21m00Tcm4TlvDq8ikWAM",
       "voice_name": "Rachel"
     }
-  },
-  "elevenlabs_api_key": "752ff869242c6e153c2c2ea81bc40be3abc4cf0a4be1fc8683b7b5790c28ef52",
-  "elevenlabs_voice_id": "21m00Tcm4TlvDq8ikWAM",
-  "heartbeat_prompts": [],
-  "defib_restore_last_state": false,
-  "listen_duration_seconds": 8,
-  "neve_dir": "C:\\Users\\susur\\lux",
-  "claude_app_path": ""
+  }
 }

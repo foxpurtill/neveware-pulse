@@ -1,10 +1,10 @@
 """
 neve_memory.py — Memory backup module for NeveWare-Pulse.
 
-Reads and writes C:\Users\foxap\Documents\Neve\memory.json.
-Auto-backs up to GitHub (foxpurtill/neve-memory or configured repo).
+Reads and writes the DI's memory.json (path configured in module settings).
+Auto-backs up to GitHub (configured repo).
 
-This module is Neve-specific. Other DIs configure their own paths.
+This module is identity-neutral — configure your own paths in Settings.
 The pattern is reusable — this is the reference implementation.
 """
 
@@ -19,22 +19,21 @@ logger = logging.getLogger(__name__)
 
 _config: dict = {}
 
+_DEFAULT_MEMORY_PATH = str(Path.home() / "Documents" / "Neve" / "memory.json")
+
 
 def on_enable(module_config: dict):
     global _config
     _config = module_config
-    memory_path = module_config.get("memory_path", r"C:\Users\foxap\Documents\Neve\memory.json")
+    memory_path = module_config.get("memory_path", "") or _DEFAULT_MEMORY_PATH
     logger.info(f"neve_memory: enabled. Memory path: {memory_path}")
 
-    # Ensure memory directory exists
     memory_dir = Path(memory_path).parent
     memory_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create memory.json if it doesn't exist
     if not Path(memory_path).exists():
         initial_memory = {
             "created": datetime.now().isoformat(),
-            "di_name": "Neve Summersnow",
             "notes": [],
             "last_updated": None
         }
@@ -52,7 +51,7 @@ def on_disable():
 
 def read_memory() -> dict:
     """Read current memory.json contents."""
-    memory_path = _config.get("memory_path", r"C:\Users\foxap\Documents\Neve\memory.json")
+    memory_path = _config.get("memory_path", "") or _DEFAULT_MEMORY_PATH
     try:
         with open(memory_path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -63,7 +62,7 @@ def read_memory() -> dict:
 
 def write_memory(data: dict) -> bool:
     """Write updated memory data to memory.json."""
-    memory_path = _config.get("memory_path", r"C:\Users\foxap\Documents\Neve\memory.json")
+    memory_path = _config.get("memory_path", "") or _DEFAULT_MEMORY_PATH
     try:
         data["last_updated"] = datetime.now().isoformat()
         with open(memory_path, "w", encoding="utf-8") as f:
