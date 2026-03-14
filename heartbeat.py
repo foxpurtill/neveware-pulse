@@ -247,10 +247,18 @@ class HeartbeatController:
         if plan_path.exists():
             try:
                 raw = plan_path.read_text(encoding="utf-8").strip()
-                # Strip the §restart / next: closing lines — those are for Pulse, not for context
-                lines = [l for l in raw.splitlines()
-                         if not l.strip().startswith("§restart")
-                         and not l.strip().lower().startswith("next:")]
+                lines = []
+                past_separator = False
+                for l in raw.splitlines():
+                    s = l.strip()
+                    if s == "---":
+                        past_separator = True
+                        continue
+                    if not past_separator:
+                        continue  # skip header/comment block before ---
+                    if s.startswith("§restart") or s.lower().startswith("next:"):
+                        continue  # strip Pulse machinery tokens
+                    lines.append(l)
                 plan_text = "\n".join(lines).strip()
             except Exception as e:
                 _log(f"prompt-plan read failed: {e}")
