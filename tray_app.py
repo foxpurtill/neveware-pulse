@@ -1,4 +1,4 @@
-﻿"""
+"""
 tray_app.py — NeveWare-Pulse core tray application.
 
 Red N = Fox away, heartbeat active.
@@ -46,6 +46,30 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("tray_app")
+
+# ---------------------------------------------------------------------------
+# Shared hidden Tk root — one per process, all popup windows use Toplevel
+# ---------------------------------------------------------------------------
+_tk_root: tk.Tk | None = None
+_tk_lock = threading.Lock()
+
+def _get_tk_root() -> tk.Tk:
+    """Return (or create) the single hidden Tk root window."""
+    global _tk_root
+    with _tk_lock:
+        if _tk_root is None:
+            _tk_root = tk.Tk()
+            _tk_root.withdraw()        # keep it invisible
+            _tk_root.wm_attributes("-topmost", False)
+        return _tk_root
+
+def _tk_window(title: str) -> tk.Toplevel:
+    """Create a Toplevel window on the shared root."""
+    root = _get_tk_root()
+    win = tk.Toplevel(root)
+    win.title(title)
+    win.attributes("-topmost", True)
+    return win
 
 # ---------------------------------------------------------------------------
 # Config
@@ -254,11 +278,9 @@ def open_first_run_setup(config: dict, on_save):
     if not missing:
         return
 
-    win = tk.Tk()
-    win.title("NeveWare-Pulse — First Run Setup")
+    win = _tk_window("NeveWare-Pulse — First Run Setup")
     win.configure(bg="#1a1a2e")
     win.resizable(False, False)
-    win.attributes("-topmost", True)
 
     bg = "#1a1a2e"
     fg = "#e0e0e0"
@@ -333,7 +355,7 @@ def open_first_run_setup(config: dict, on_save):
               bg="#222244", fg="#888899", font=("Segoe UI", 9),
               padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.mainloop()
+    win.wait_window()
 
 
 def open_madlib_manager(neve_dir: Path):
@@ -380,11 +402,9 @@ def open_madlib_manager(neve_dir: Path):
     flash_bg = "#1a2a4a"
     flash_fg = "#66aaff"
 
-    win = tk.Tk()
-    win.title("Madlib Pool")
+    win = _tk_window("Madlib Pool")
     win.configure(bg=bg)
     win.resizable(False, False)
-    win.attributes("-topmost", True)
     win.geometry("520x580")
 
     # Header
@@ -556,16 +576,14 @@ def open_madlib_manager(neve_dir: Path):
               padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
 
     render_list()
-    win.mainloop()
+    win.wait_window()
 
 
 
     """Open the Settings tkinter window."""
-    win = tk.Tk()
-    win.title("NeveWare-Pulse — Settings")
+    win = _tk_window("NeveWare-Pulse — Settings")
     win.configure(bg="#1a1a2e")
     win.resizable(False, False)
-    win.attributes("-topmost", True)
 
     pad = {"padx": 8, "pady": 4}
     fg = "#e0e0e0"
@@ -728,16 +746,14 @@ def open_madlib_manager(neve_dir: Path):
               bg="#333355", fg=fg, font=("Segoe UI", 9),
               padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.mainloop()
+    win.wait_window()
 
 
 def open_settings(config: dict, modules: list[ModuleInfo], on_save):
     """Open the Settings tkinter window."""
-    win = tk.Tk()
-    win.title("NeveWare-Pulse — Settings")
+    win = _tk_window("NeveWare-Pulse — Settings")
     win.configure(bg="#1a1a2e")
     win.resizable(False, False)
-    win.attributes("-topmost", True)
 
     pad = {"padx": 8, "pady": 4}
     fg = "#e0e0e0"
@@ -862,18 +878,16 @@ def open_settings(config: dict, modules: list[ModuleInfo], on_save):
               bg="#333355", fg=fg, font=("Segoe UI", 9),
               padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.mainloop()
+    win.wait_window()
 
 
 # ---------------------------------------------------------------------------
 # About window
 # ---------------------------------------------------------------------------
 def open_about():
-    win = tk.Tk()
-    win.title("About NeveWare-Pulse")
+    win = _tk_window("About NeveWare-Pulse")
     win.configure(bg="#0f0f23")
     win.resizable(False, False)
-    win.attributes("-topmost", True)
 
     about_text = (
         "NeveWare-Pulse\n"
@@ -909,7 +923,7 @@ def open_about():
         padx=20, pady=6, bd=0, cursor="hand2"
     ).pack(pady=(0, 16))
 
-    win.mainloop()
+    win.wait_window()
 
 
 # ---------------------------------------------------------------------------
@@ -1321,6 +1335,9 @@ root.mainloop()
 
     def run(self):
         logger.info("NeveWare-Pulse starting...")
+
+        # Initialise the shared Tk root on the main thread before any popups open
+        _get_tk_root()
 
         # Write PID file so the Defibrillator can detect us instantly
         try:
