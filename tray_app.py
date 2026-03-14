@@ -48,23 +48,30 @@ logging.basicConfig(
 logger = logging.getLogger("tray_app")
 
 # ---------------------------------------------------------------------------
-# Shared hidden Tk root — one per process, all popup windows use Toplevel
+# Tkinter main-thread dispatcher
+# All popup windows MUST be created on the main thread (tkinter requirement on Windows).
+# Menu callbacks run on the pystray thread — they must use _tk_call() to schedule UI.
 # ---------------------------------------------------------------------------
 _tk_root: tk.Tk | None = None
 _tk_lock = threading.Lock()
 
 def _get_tk_root() -> tk.Tk:
-    """Return (or create) the single hidden Tk root window."""
+    """Return (or create) the single hidden Tk root. Call from main thread only."""
     global _tk_root
     with _tk_lock:
         if _tk_root is None:
             _tk_root = tk.Tk()
-            _tk_root.withdraw()        # keep it invisible
-            _tk_root.wm_attributes("-topmost", False)
+            _tk_root.withdraw()
         return _tk_root
 
+def _tk_call(fn):
+    """Schedule fn() on the main tkinter thread. Safe to call from any thread."""
+    root = _tk_root
+    if root:
+        root.after(0, fn)
+
 def _tk_window(title: str) -> tk.Toplevel:
-    """Create a Toplevel window on the shared root."""
+    """Create a Toplevel on the shared root. Must be called from the main thread."""
     root = _get_tk_root()
     win = tk.Toplevel(root)
     win.title(title)
@@ -355,7 +362,7 @@ def open_first_run_setup(config: dict, on_save):
               bg="#222244", fg="#888899", font=("Segoe UI", 9),
               padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.wait_window()
+
 
 
 def open_madlib_manager(neve_dir: Path):
@@ -576,7 +583,7 @@ def open_madlib_manager(neve_dir: Path):
               padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
 
     render_list()
-    win.wait_window()
+
 
 
 
@@ -746,7 +753,7 @@ def open_madlib_manager(neve_dir: Path):
               bg="#333355", fg=fg, font=("Segoe UI", 9),
               padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.wait_window()
+
 
 
 def open_settings(config: dict, modules: list[ModuleInfo], on_save):
@@ -878,7 +885,7 @@ def open_settings(config: dict, modules: list[ModuleInfo], on_save):
               bg="#333355", fg=fg, font=("Segoe UI", 9),
               padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
 
-    win.wait_window()
+
 
 
 # ---------------------------------------------------------------------------
@@ -923,7 +930,7 @@ def open_about():
         padx=20, pady=6, bd=0, cursor="hand2"
     ).pack(pady=(0, 16))
 
-    win.wait_window()
+
 
 
 # ---------------------------------------------------------------------------
@@ -1264,21 +1271,17 @@ root.mainloop()
 
     def _menu_madlib(self, icon, item):
         neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
-        threading.Thread(target=open_madlib_manager, args=(neve_dir,), daemon=True).start()
+        _tk_call(lambda: open_madlib_manager(neve_dir))
 
     def _menu_discord(self, icon, item):
         # Opens FoxPur Studios site where Discord link will live once server is active
         webbrowser.open("https://foxpur-studios.com")
 
     def _menu_settings(self, icon, item):
-        threading.Thread(
-            target=open_settings,
-            args=(self.config, self.modules, self._on_settings_saved),
-            daemon=True
-        ).start()
+        _tk_call(lambda: open_settings(self.config, self.modules, self._on_settings_saved))
 
     def _menu_about(self, icon, item):
-        threading.Thread(target=open_about, daemon=True).start()
+        _tk_call(open_about)
 
     def _menu_quit(self, icon, item):
         logger.info("Quit requested.")
@@ -1351,11 +1354,7 @@ root.mainloop()
         self._load_modules()
 
         # First-run setup — prompt for missing credentials on initial install
-        threading.Thread(
-            target=open_first_run_setup,
-            args=(self.config, self._on_settings_saved),
-            daemon=True
-        ).start()
+        _tk_call(lambda: open_first_run_setup(self.config, self._on_settings_saved))
 
         # Start heartbeat controller
         self.heartbeat_controller = hb.HeartbeatController(self.config)
@@ -1396,7 +1395,21 @@ root.mainloop()
         logger.info("F1 (pause/resume) and F10 (quit) registered.")
 
         logger.info(f"Tray icon running. State: {'Red (active)' if self.active else 'Green (paused)'}")
-        self.tray_icon.run()
+
+        # Run pystray in a daemon thread — main thread runs tkinter's event loop
+        # so that after() callbacks from menu actions reach the UI thread correctly
+        tray_thread = threading.Thread(target=self.tray_icon.run, daemon=True)
+        tray_thread.start()
+
+        # Main thread: pump tkinter events indefinitely
+        root = _get_tk_root()
+        while tray_thread.is_alive():
+            try:
+                root.update()
+            except tk.TclError:
+                break
+            import time as _time
+            _time.sleep(0.05)
 
 
 # ---------------------------------------------------------------------------
