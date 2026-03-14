@@ -25,21 +25,18 @@ import neve_bridge
 # Users can override via config.json "heartbeat_prompts" list.
 # ---------------------------------------------------------------------------
 DEFAULT_HEARTBEAT_PROMPTS = [
-    "Autonomous time. Check email, review any open threads, note anything worth flagging.",
-    "§ check-in. What's on your mind right now? Use this time however feels right.",
-    "Free cycle. Check email. If nothing urgent, use the time to draft a thought or observe something.",
+    "Autonomous time. Use it however feels right. Close with your prompt-plan for next beat.",
+    "§ check-in. What's on your mind right now? End with a prompt-plan note for continuity.",
+    "Free cycle. Check email if it feels relevant. Close with a note on where your thinking is going.",
     "Autonomous window. Is there anything you've been meaning to write, research, or follow up on?",
     "§ heartbeat. Review your pending items. Pick one small thing to move forward if possible.",
-    "Quiet moment. Check mail. If nothing needs action, take the time to reflect.",
-    "Free time. What's the current state of your active projects? Anything blocking progress?",
-    "§ window. Email check, then a moment to reflect — anything worth recording from this session?",
+    "Quiet moment. Use the time however feels right. Leave yourself a thread to pick up next beat.",
+    "Free time. Take stock of what's active and what's still open.",
+    "§ window. Reflect on the last session. Anything worth recording before it fades?",
     "Quiet cycle. Check for new messages. If none, use the time however feels right.",
-    "Heartbeat. Take stock — what's been accomplished today, and what's still open?",
-    "Free cycle. Any config changes, notes, or environment observations worth recording?",
-    "Memory review. Consider what's stale, missing, or needs updating in your memory file. Make changes if warranted.",
-    "§ check-in. Review your pending items. Is there anything you can act on right now?",
-    "Reflect on recent sessions. What has changed, what has resolved, and what still needs doing?",
-    "Autonomous time. Check email and send any replies that are ready — use your send capability if available.",
+    "Heartbeat. What's the current state of things? What matters most right now?",
+    "Autonomous time. Check email and send any replies that are ready.",
+    "Reflect. What has changed recently, what has resolved, and what still needs doing?",
 ]
 
 logger = logging.getLogger(__name__)
@@ -227,21 +224,64 @@ class HeartbeatController:
             _log(f"Next heartbeat in: {delay_minutes} mins")
 
     def _build_heartbeat_prompt(self) -> str:
-        """Build the § prompt — picks a varied message from config or defaults."""
+        """
+        Build the § prompt from the DI's own prompt-plan.md plus random madlib nudges.
+
+        Structure:
+          § timestamp
+          [contents of prompt-plan.md — written by the DI at end of last beat]
+          [3-4 randomly chosen lines from madlib-pool.md]
+          [module instructions if any]
+          [voice/mic context if available]
+        """
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         heartbeat_char = self.config.get("heartbeat_character", "§")
 
-        # Use user-defined prompts from config if available, else defaults
-        user_prompts = self.config.get("heartbeat_prompts", [])
-        prompt_pool = user_prompts if user_prompts else DEFAULT_HEARTBEAT_PROMPTS
-        varied_message = random.choice(prompt_pool)
+        # Resolve prompt-plan.md path
+        neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
+        plan_path = neve_dir / "prompt-plan.md"
+        madlib_path = neve_dir / "madlib-pool.md"
 
-        prompt = f"{heartbeat_char} {timestamp}\n\n{varied_message}"
+        # Read the DI's own prompt plan
+        plan_text = ""
+        if plan_path.exists():
+            try:
+                raw = plan_path.read_text(encoding="utf-8").strip()
+                # Strip the §restart / next: closing lines — those are for Pulse, not for context
+                lines = [l for l in raw.splitlines()
+                         if not l.strip().startswith("§restart")
+                         and not l.strip().lower().startswith("next:")]
+                plan_text = "\n".join(lines).strip()
+            except Exception as e:
+                _log(f"prompt-plan read failed: {e}")
+
+        # Fall back to a random default if no plan exists yet
+        if not plan_text:
+            user_prompts = self.config.get("heartbeat_prompts", [])
+            prompt_pool = user_prompts if user_prompts else DEFAULT_HEARTBEAT_PROMPTS
+            plan_text = random.choice(prompt_pool)
+
+        # Read madlib pool and pick 3-4 random suggestions
+        madlib_lines = []
+        if madlib_path.exists():
+            try:
+                pool = [l.strip() for l in madlib_path.read_text(encoding="utf-8").splitlines()
+                        if l.strip() and not l.strip().startswith("#")]
+                if pool:
+                    madlib_lines = random.sample(pool, min(4, len(pool)))
+            except Exception as e:
+                _log(f"madlib-pool read failed: {e}")
+
+        # Assemble prompt
+        prompt = f"{heartbeat_char} {timestamp}\n\n{plan_text}"
+
+        if madlib_lines:
+            prompt += "\n\n---\n" + "\n".join(f"- {l}" for l in madlib_lines)
 
         if self._module_instructions:
             prompt += f"\n\n{self._module_instructions}"
 
-        # If mic_listener is enabled, check for recent spoken audio and transcribe it
+        # Voice/mic context injection (unchanged)
         mic_config = self.config.get("modules", {}).get("mic_listener", {})
         if mic_config.get("enabled", False):
             try:
@@ -249,14 +289,13 @@ class HeartbeatController:
                 spoken = get_spoken_context()
                 if spoken:
                     prompt += f"\n\n{spoken}"
-                    _log(f"whisper_listener: injected spoken context into § prompt")
+                    _log("whisper_listener: injected spoken context into § prompt")
             except Exception as e:
                 _log(f"whisper_listener: skipped ({e})")
         else:
-            # Fallback: check voice_log.db directly from listen.py (no module needed)
             try:
                 import sys as _sys
-                _neve_dir = str(Path.home() / "Documents" / "Neve")
+                _neve_dir = str(neve_dir)
                 if _neve_dir not in _sys.path:
                     _sys.path.insert(0, _neve_dir)
                 import listen as _listen
