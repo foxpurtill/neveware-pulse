@@ -336,7 +336,230 @@ def open_first_run_setup(config: dict, on_save):
     win.mainloop()
 
 
-def open_settings(config: dict, modules: list[ModuleInfo], on_save):
+def open_madlib_manager(neve_dir: Path):
+    """
+    Madlib pool manager window.
+    Pinned (must-have) items shown greyed, locked.
+    User items: X to remove (with confirm + don't-ask-again), add field + button.
+    New items flash blue then settle. Saves back to madlib-pool.md on Save.
+    """
+    madlib_path = neve_dir / "madlib-pool.md"
+
+    PINNED = [
+        "Update memory.json before closing the beat.",
+        "Write prompt-plan.md — leave yourself a thread for next time.",
+        "End with §restart and next:N.",
+    ]
+
+    # Load current pool
+    def load_pool():
+        if not madlib_path.exists():
+            return []
+        lines = []
+        for l in madlib_path.read_text(encoding="utf-8").splitlines():
+            s = l.strip()
+            if s and not s.startswith("#"):
+                lines.append(s)
+        return lines
+
+    def save_pool(items):
+        header = (
+            "# Pulse Madlib Pool\n"
+            "# One suggestion per line. Lines starting with # are ignored.\n"
+            "# 3-4 lines are randomly chosen and appended to the prompt-plan each beat.\n\n"
+        )
+        madlib_path.write_text(header + "\n".join(items) + "\n", encoding="utf-8")
+
+    items = load_pool()
+    skip_confirm = [False]
+
+    bg = "#1a1a2e"
+    fg = "#e0e0e0"
+    pin_fg = "#555577"
+    entry_bg = "#16213e"
+    flash_bg = "#1a2a4a"
+    flash_fg = "#66aaff"
+
+    win = tk.Tk()
+    win.title("Madlib Pool")
+    win.configure(bg=bg)
+    win.resizable(False, False)
+    win.attributes("-topmost", True)
+    win.geometry("520x580")
+
+    # Header
+    hdr = tk.Frame(win, bg=bg)
+    hdr.pack(fill="x", padx=16, pady=(14, 6))
+    tk.Label(hdr, text="Madlib Pool", bg=bg, fg="#aaaaff",
+             font=("Segoe UI", 11, "bold")).pack(side="left")
+    count_lbl = tk.Label(hdr, bg="#222244", fg="#888899",
+                         font=("Segoe UI", 8), padx=8, pady=2)
+    count_lbl.pack(side="left", padx=8)
+
+    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(0, 8))
+
+    # Scrollable list area
+    canvas = tk.Canvas(win, bg=bg, highlightthickness=0, height=400)
+    scrollbar = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y", padx=(0, 4))
+    canvas.pack(fill="both", expand=True, padx=(16, 0))
+    list_frame = tk.Frame(canvas, bg=bg)
+    canvas_window = canvas.create_window((0, 0), window=list_frame, anchor="nw")
+
+    def on_frame_configure(e):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+    def on_canvas_configure(e):
+        canvas.itemconfig(canvas_window, width=e.width)
+    list_frame.bind("<Configure>", on_frame_configure)
+    canvas.bind("<Configure>", on_canvas_configure)
+
+    item_frames = []
+
+    def update_count():
+        count_lbl.config(text=f"{len(items)} suggestion{'s' if len(items) != 1 else ''}")
+
+    def render_list():
+        for f in item_frames:
+            f.destroy()
+        item_frames.clear()
+
+        # Pinned items
+        for text in PINNED:
+            row = tk.Frame(list_frame, bg="#111122", pady=4)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text="🔒", bg="#111122", fg=pin_fg,
+                     font=("Segoe UI", 10)).pack(side="left", padx=(8, 4))
+            tk.Label(row, text=text, bg="#111122", fg=pin_fg,
+                     font=("Segoe UI", 9, "italic"), anchor="w",
+                     wraplength=400, justify="left").pack(side="left", fill="x", expand=True)
+            item_frames.append(row)
+
+        # User items
+        for i, text in enumerate(items):
+            row = tk.Frame(list_frame, bg=entry_bg, pady=4)
+            row.pack(fill="x", pady=2)
+            lbl = tk.Label(row, text=text, bg=entry_bg, fg=fg,
+                           font=("Segoe UI", 9), anchor="w",
+                           wraplength=400, justify="left")
+            lbl.pack(side="left", padx=(10, 4), fill="x", expand=True)
+
+            def make_remove(idx, txt, r, l):
+                def do_remove():
+                    if skip_confirm[0]:
+                        items.pop(idx)
+                        render_list()
+                        update_count()
+                        return
+                    # Confirm dialog
+                    dlg = tk.Toplevel(win)
+                    dlg.title("Remove?")
+                    dlg.configure(bg=bg)
+                    dlg.resizable(False, False)
+                    dlg.attributes("-topmost", True)
+                    dlg.grab_set()
+                    tk.Label(dlg, text="Remove this suggestion?",
+                             bg=bg, fg=fg, font=("Segoe UI", 10, "bold"),
+                             pady=10).pack(padx=20)
+                    tk.Label(dlg, text=f'"{txt}"', bg=bg, fg="#888899",
+                             font=("Segoe UI", 9, "italic"),
+                             wraplength=320, justify="center").pack(padx=20)
+                    dontask_var = tk.BooleanVar()
+                    tk.Checkbutton(dlg, text="don't ask me again",
+                                   variable=dontask_var,
+                                   bg=bg, fg="#666688", selectcolor=entry_bg,
+                                   font=("Segoe UI", 8)).pack(pady=(8, 4))
+                    btn_row = tk.Frame(dlg, bg=bg)
+                    btn_row.pack(pady=(4, 14))
+                    def confirm_yes():
+                        if dontask_var.get():
+                            skip_confirm[0] = True
+                        dlg.destroy()
+                        items.pop(idx)
+                        render_list()
+                        update_count()
+                    def confirm_no():
+                        dlg.destroy()
+                    tk.Button(btn_row, text="Cancel", command=confirm_no,
+                              bg="#222244", fg="#888899", font=("Segoe UI", 9),
+                              padx=12, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
+                    tk.Button(btn_row, text="Remove", command=confirm_yes,
+                              bg="#441122", fg="#ff6666", font=("Segoe UI", 9, "bold"),
+                              padx=12, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
+                return do_remove
+
+            btn = tk.Button(row, text="✕", command=make_remove(i, text, row, lbl),
+                            bg=entry_bg, fg="#555577", font=("Segoe UI", 10),
+                            bd=0, cursor="hand2", padx=8, pady=0,
+                            activebackground="#441122", activeforeground="#ff6666")
+            btn.pack(side="right", padx=6)
+            item_frames.append(row)
+
+        update_count()
+        canvas.yview_moveto(1.0)
+
+    # Add row
+    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(8, 6))
+    add_frame = tk.Frame(win, bg=bg)
+    add_frame.pack(fill="x", padx=16, pady=(0, 8))
+    new_var = tk.StringVar()
+    new_entry = tk.Entry(add_frame, textvariable=new_var, bg=entry_bg, fg=fg,
+                         insertbackground=fg, font=("Segoe UI", 9), width=38)
+    new_entry.pack(side="left", padx=(0, 8), ipady=4)
+
+    def do_add():
+        val = new_var.get().strip()
+        if not val:
+            return
+        items.append(val)
+        new_var.set("")
+        render_list()
+        update_count()
+        # Flash the new item
+        if item_frames:
+            new_row = item_frames[-1]
+            orig_bg = entry_bg
+            def flash(count=0):
+                if count < 6:
+                    c = flash_bg if count % 2 == 0 else orig_bg
+                    try:
+                        new_row.configure(bg=c)
+                        for child in new_row.winfo_children():
+                            child.configure(bg=c)
+                    except Exception:
+                        pass
+                    win.after(200, lambda: flash(count + 1))
+            flash()
+            canvas.yview_moveto(1.0)
+        new_entry.focus()
+
+    tk.Button(add_frame, text="+ Add", command=do_add,
+              bg="#2a2a4a", fg="#aaaacc", font=("Segoe UI", 9, "bold"),
+              padx=12, pady=4, bd=0, cursor="hand2",
+              activebackground="#3a3a6a").pack(side="left")
+    new_entry.bind("<Return>", lambda e: do_add())
+
+    # Save / Close buttons
+    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(4, 8))
+    save_frame = tk.Frame(win, bg=bg)
+    save_frame.pack(pady=(0, 14))
+
+    def do_save():
+        save_pool(items)
+        win.destroy()
+
+    tk.Button(save_frame, text="Save", command=do_save,
+              bg="#533483", fg="white", font=("Segoe UI", 9, "bold"),
+              padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
+    tk.Button(save_frame, text="Cancel", command=win.destroy,
+              bg="#222244", fg="#888899", font=("Segoe UI", 9),
+              padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
+
+    render_list()
+    win.mainloop()
+
+
+
     """Open the Settings tkinter window."""
     win = tk.Tk()
     win.title("NeveWare-Pulse — Settings")
@@ -823,6 +1046,7 @@ root.mainloop()
             Item(active_label, self._menu_toggle, default=True),
             Menu.SEPARATOR,
             Item("Emoji Picker", self._menu_emoji_picker),
+            Item("Madlib Pool", self._menu_madlib),
             Item("FoxPur Studios", self._menu_discord),
             Menu.SEPARATOR,
         ]
@@ -885,6 +1109,10 @@ root.mainloop()
     def _menu_emoji_picker(self, icon, item):
         if self.emoji:
             threading.Thread(target=self.emoji._show_window, daemon=True).start()
+
+    def _menu_madlib(self, icon, item):
+        neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
+        threading.Thread(target=open_madlib_manager, args=(neve_dir,), daemon=True).start()
 
     def _menu_discord(self, icon, item):
         # Opens FoxPur Studios site where Discord link will live once server is active
