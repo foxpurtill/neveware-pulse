@@ -145,6 +145,20 @@ for label, key, tip in ADV_FIELDS:
                    show='*' if existing_val else '')
     ent.pack(side='left', padx=(4, 2))
 
+    # Placeholder hint when empty
+    placeholder = 'sk-xxxxxxxx... (paste your key)'
+    def _on_focus_in(e, e2=ent, p=placeholder, v=var):
+        if v.get() == p:
+            v.set(''); e2.config(fg=fg, show='')
+    def _on_focus_out(e, e2=ent, p=placeholder, v=var):
+        if not v.get():
+            e2.config(show='', fg='#555577'); v.set(p)
+    if not existing_val:
+        var.set(placeholder)
+        ent.config(fg='#555577')
+    ent.bind('<FocusIn>',  _on_focus_in)
+    ent.bind('<FocusOut>', _on_focus_out)
+
     # 👁 toggle — only works when field has content
     eye_var = tk.BooleanVar(value=False)
     def _make_eye(e=ent, ev=eye_var):
@@ -160,10 +174,10 @@ for label, key, tip in ADV_FIELDS:
                    cursor='hand2', indicatoron=False).pack(side='left', padx=2)
 
     # ✕ clear — wipes field so user can type/paste a new key
-    def _make_clear(e=ent, v=var, ev=eye_var):
+    def _make_clear(e=ent, v=var, ev=eye_var, p=placeholder, ex=existing_val):
         def _c():
             v.set('')
-            e.config(show='')
+            e.config(show='', fg=fg)
             ev.set(False)
             e.focus()
         return _c
@@ -268,7 +282,14 @@ def save():
         config[key] = int(val) if key == 'default_interval_minutes' else val
     config['defib_restore_last_state'] = dv.get()
     for key, var in adv_entries.items():
-        config[key] = var.get().strip()  # save even if empty — allows clearing
+        val = var.get().strip()
+        # Ignore placeholder text
+        if val.startswith('sk-xxxxxxxx'):
+            val = ''
+        # Strip sk- prefix if user pasted full key
+        if val.lower().startswith('sk-'):
+            val = val[3:]
+        config[key] = val
     config['claude_app_path'] = claude_path_var.get().strip()
     if config.get('elevenlabs_voice_id'):
         config.setdefault('modules', {}).setdefault('voice_output', {})['voice_id'] = config['elevenlabs_voice_id']

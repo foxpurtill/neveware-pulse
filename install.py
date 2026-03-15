@@ -181,8 +181,13 @@ def step_identity(silent):
     email        = ask("DI email address (for email_watcher module)", "")
     el_voice_id  = ask("ElevenLabs Voice ID (leave blank to skip)", "")
     if el_voice_id:
-        print(f"  {DIM}Your API key will be stored only in config.json on this machine.{RESET}")
+        print(f"  {DIM}Your API key will be stored only in config.json on this machine.")
+        print(f"  ElevenLabs API keys look like: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        print(f"  Paste your key below (the sk- prefix will be handled automatically).{RESET}")
         el_api_key = ask("ElevenLabs API key (paste with Ctrl+V, leave blank to skip)", "")
+        # Strip sk- prefix if user included it — ElevenLabs only needs the hex portion
+        if el_api_key.lower().startswith("sk-"):
+            el_api_key = el_api_key[3:]
     else:
         el_api_key = ""
 
