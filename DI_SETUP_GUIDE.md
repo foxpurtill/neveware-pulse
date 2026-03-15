@@ -78,32 +78,84 @@ To check / enable it:
 
 ## 2. Desktop Commander
 
-Desktop Commander is an MCP server that gives Claude access to the local filesystem and browser.
+Desktop Commander is an MCP extension that gives Claude access to the local filesystem and terminal.
 
-This is what allows Neve to:
-- Read and write files on the machine
+This is what allows the DI to:
+- Read and write files on the machine (memory.json, config files, logs)
+- Run terminal commands (git, python, etc.)
 - Navigate Chrome (send emails, open pages, interact with web apps)
-- Run terminal commands
 
 **Without Desktop Commander, the DI cannot act autonomously on the local machine.**
 
-### Installation
+---
 
-Install the Desktop Commander MCP extension for Claude:  
-→ Search "Desktop Commander" in the Claude MCP integrations page, or install from [desktop-commander.ai](https://desktop-commander.ai)
+### ⚠️ Important: Two installation methods — only one works correctly
 
-Once installed, it appears as a connected tool in Claude sessions.
+Desktop Commander can be installed two ways. One works cleanly. The other caused
+contributors to spend hours troubleshooting.
+
+**Method A — Via claude.ai (Recommended)**
+
+1. Go to **claude.ai**
+2. Open **Settings → Integrations** (or the puzzle piece / tools icon in the sidebar)
+3. Search for **Desktop Commander**
+4. Click **Connect** or **Enable**
+5. Follow any prompts to grant permissions
+
+This installs DC as a **Desktop Extension (DXT)** — managed entirely by Claude, no config
+files needed. This is what runs on your machine right now if DC is working.
+
+**Method B — Via Windows Store**
+
+Installing Claude from the Windows Store and then enabling DC from the Store can place
+DC in a sandboxed `WindowsApps` path that Claude doesn't find automatically. This is
+the source of the 3-hour problem.
+
+If you installed via the Store and DC isn't connecting:
+
+1. **Do not** try to manually point Claude at the WindowsApps path
+2. Instead: open **claude.ai in your browser** (not the Store app)
+3. Go to **Settings → Integrations** and connect DC from there
+4. Restart the Claude desktop app if needed
+
+The Store app and the claude.ai web interface share the same account and settings —
+connecting via the web UI will make DC available in the desktop app too.
+
+---
+
+### After installation — verify it's working
+
+DC is active if you can see the hammer/tools icon in the chat input and Desktop Commander
+tools are listed. You can also ask Claude:
+
+> "Use Desktop Commander to read the file C:\Windows\System32\drivers\etc\hosts"
+
+If DC responds with file contents, it's working.
+
+---
+
+### Set allowed directories (optional but recommended)
+
+By default DC may restrict which paths it can access. To give full access:
+
+1. Ask Claude: *"Use Desktop Commander to set allowedDirectories to an empty array"*
+2. Or: DC's `get_config` tool will show current restrictions
+
+An empty `allowedDirectories` array means unrestricted filesystem access.
+Set specific paths if you prefer to limit scope.
+
+---
 
 ### What it enables in Pulse context
 
 With Desktop Commander active, the DI can:
 - Read `memory.json` and other local files during § time
+- Write notes, update files, manage projects
+- Run git commands, Python scripts, terminal operations
 - Send emails by navigating Chrome (open Gmail, fill drafts, click send)
-- Write notes, update files, manage local data
 
-> **Security note:** Desktop Commander gives broad filesystem access.  
-> The DI should only use paths they have been explicitly given access to.  
-> Do not expose sensitive directories without understanding what you're enabling.
+> **Security note:** Desktop Commander gives broad filesystem access.
+> The DI should use it responsibly — only accessing paths and files relevant to their work.
 
 ---
 
