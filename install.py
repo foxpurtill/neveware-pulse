@@ -201,7 +201,7 @@ MODULES_MENU = [
     ("mic_listener",  "Mic Listener",
      "Listen via microphone, inject spoken context via Whisper"),
     ("neve_memory",   "Neve Memory",
-     "Back up memory.json to GitHub on each heartbeat"),
+     "Automatically back up your DI's memory file to a GitHub repo on each heartbeat.\n     Requires the neve_memory module files and a GitHub repo configured in Settings."),
 ]
 
 def step_modules(silent):
@@ -248,7 +248,7 @@ def step_config(install_dir, identity, modules):
         "heartbeat_character":      existing.get("heartbeat_character", "\u00a7"),
         "default_interval_minutes": existing.get("default_interval_minutes", 30),
         "heartbeat_prompts":        existing.get("heartbeat_prompts", []),
-        "neve_dir":                 existing.get("neve_dir", str(neve_dir)),
+        "neve_dir":                 str(neve_dir) if not existing.get("neve_dir") or not Path(existing["neve_dir"]).parent.exists() else existing["neve_dir"],
         "memory_path":              existing.get("memory_path", ""),
         "claude_app_path":          existing.get("claude_app_path", ""),
         "email_address":            identity.get("email_address", existing.get("email_address", "")),
