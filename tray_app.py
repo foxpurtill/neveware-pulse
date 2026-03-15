@@ -2502,6 +2502,10 @@ root.mainloop()
     def _menu_edit_prompt_plan(self, icon, item):
         def run():
             neve_dir = Path(self.config.get('neve_dir', '') or Path.home() / 'Documents' / 'Neve')
+            # Fallback if configured path doesn't exist on this machine
+            if not neve_dir.exists():
+                neve_dir = Path.home() / 'Documents' / 'Neve'
+            neve_dir.mkdir(parents=True, exist_ok=True)
             plan_path = neve_dir / 'prompt-plan.md'
             if not plan_path.exists():
                 self.heartbeat_controller._clear_prompt_plan(plan_path)
