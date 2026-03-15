@@ -129,7 +129,6 @@ adv_btn.config(command=lambda: [adv_open.set(not adv_open.get()), toggle_advance
 # API key rows
 adv_entries = {}
 ADV_FIELDS = [
-    ('Claude API Key',     'claude_api_key',     'Anthropic API key.\nStored locally in config.json only.\nNever transmitted outside your machine.'),
     ('ElevenLabs API Key', 'elevenlabs_api_key', 'ElevenLabs API key for voice output.\nGet yours at elevenlabs.io/app'),
 ]
 for label, key, tip in ADV_FIELDS:
