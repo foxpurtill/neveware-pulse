@@ -2503,8 +2503,10 @@ root.mainloop()
             import subprocess
             neve_dir = str(Path(self.config.get('neve_dir', '') or Path.home() / 'Documents' / 'Neve'))
             python_exe = sys.executable.replace("pythonw.exe", "python.exe")
-            subprocess.run([python_exe, str(BASE_DIR / "madlib_window.py"), neve_dir],
-                           capture_output=True, text=True)
+            subprocess.Popen(
+                [python_exe, str(BASE_DIR / "madlib_window.py"), neve_dir],
+                creationflags=0x08000000
+            )
         threading.Thread(target=run, daemon=True).start()
 
 
@@ -2521,8 +2523,11 @@ root.mainloop()
         def run():
             import subprocess
             python_exe = sys.executable.replace("pythonw.exe", "python.exe")
-            subprocess.run([python_exe, str(BASE_DIR / "settings_window.py")],
-                           capture_output=True, text=True)
+            proc = subprocess.Popen(
+                [python_exe, str(BASE_DIR / "settings_window.py")],
+                creationflags=0x08000000
+            )
+            proc.wait()
             try:
                 import json as _j
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
