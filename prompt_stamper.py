@@ -119,6 +119,11 @@ def _unregister_hook():
         finally:
             _hook_registered = False
             logger.info("prompt_stamper: Enter hook removed.")
+    # Belt-and-suspenders: ensure all keyboard hooks are fully cleared
+    try:
+        keyboard.unhook_all()
+    except Exception:
+        pass
 
 
 def start():

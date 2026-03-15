@@ -13,7 +13,6 @@ import logging
 import threading
 import tkinter as tk
 from tkinter import ttk
-import keyboard
 import pyperclip
 import pyautogui
 
@@ -70,22 +69,15 @@ class EmojiPicker:
             logger.error(f"save_recent: {e}")
 
     def start(self, hotkey: str = None):
-        """Register the global hotkey."""
+        """Record the configured hotkey. Registration is handled by tray_app's hotkey pump."""
         if hotkey:
             self._hotkey = hotkey
-        if not self._hotkey_registered:
-            keyboard.add_hotkey(self._hotkey, self._open_picker, suppress=True)
-            self._hotkey_registered = True
-            logger.info(f"emoji_picker: hotkey {self._hotkey} registered.")
+        self._hotkey_registered = True
+        logger.info(f"emoji_picker: hotkey {self._hotkey} managed by hotkey pump.")
 
     def stop(self):
-        """Unregister the hotkey."""
-        if self._hotkey_registered:
-            try:
-                keyboard.remove_hotkey(self._hotkey)
-            except Exception:
-                pass
-            self._hotkey_registered = False
+        """Clear hotkey state. De-registration is handled by tray_app's hotkey pump."""
+        self._hotkey_registered = False
 
     def _open_picker(self):
         """Called on hotkey press — opens the picker window in the main thread."""

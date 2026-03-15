@@ -44,7 +44,8 @@ import pystray
 
 from pystray import MenuItem as Item, Menu
 
-import keyboard
+import ctypes
+from ctypes import wintypes
 
 
 
@@ -73,6 +74,50 @@ MODULES_DIR = BASE_DIR / "modules"
 ASSETS_DIR  = BASE_DIR / "assets"
 
 STATE_PATH  = BASE_DIR / ".state.json"
+
+
+
+# ---------------------------------------------------------------------------
+
+# Global hotkey constants (RegisterHotKey — no low-level keyboard hook)
+
+# ---------------------------------------------------------------------------
+
+WM_HOTKEY              = 0x0312
+WM_APP_REREGISTER_F1F2 = 0x8001  # custom: pump thread re-registers F1/F2 on resume
+WM_APP_REGISTER_EMOJI  = 0x8002  # custom: pump thread re-registers emoji hotkey
+
+MOD_NOREPEAT = 0x4000
+MOD_CONTROL  = 0x0002
+MOD_ALT      = 0x0001
+
+_HOTKEY_F1    = 1
+_HOTKEY_F2    = 2
+_HOTKEY_F10   = 10
+_HOTKEY_EMOJI = 3
+
+_pump_thread_id: int = 0  # set by hotkey pump thread at startup
+
+
+def _parse_hotkey_str(hotkey_str: str) -> tuple:
+    """Convert 'ctrl+alt+e' to (modifiers, vk_code) for RegisterHotKey."""
+    parts = [p.strip().lower() for p in hotkey_str.split("+")]
+    mods = MOD_NOREPEAT
+    vk = 0
+    for part in parts:
+        if part in ("ctrl", "control"):
+            mods |= MOD_CONTROL
+        elif part == "alt":
+            mods |= MOD_ALT
+        elif part == "shift":
+            mods |= 0x0004
+        elif part == "win":
+            mods |= 0x0008
+        elif len(part) == 1:
+            vk = ord(part.upper())
+        elif part.startswith("f") and part[1:].isdigit():
+            vk = 0x6F + int(part[1:])  # F1=0x70, F2=0x71, F10=0x79
+    return mods, vk
 
 
 
@@ -674,796 +719,6 @@ def open_first_run_setup(config: dict, on_save):
 
 
 
-def open_madlib_manager(neve_dir: Path):
-
-    """
-
-    Madlib pool manager window.
-
-    Pinned (must-have) items shown greyed, locked.
-
-    User items: X to remove (with confirm + don't-ask-again), add field + button.
-
-    New items flash blue then settle. Saves back to madlib-pool.md on Save.
-
-    """
-
-    madlib_path = neve_dir / "madlib-pool.md"
-
-
-
-    PINNED = [
-
-        "Update memory.json before closing the beat.",
-
-        "Write prompt-plan.md ? leave yourself a thread for next time.",
-
-        "End with ?restart and next:N.",
-
-    ]
-
-
-
-    # Load current pool
-
-    def load_pool():
-
-        if not madlib_path.exists():
-
-            return []
-
-        lines = []
-
-        for l in madlib_path.read_text(encoding="utf-8").splitlines():
-
-            s = l.strip()
-
-            if s and not s.startswith("#"):
-
-                lines.append(s)
-
-        return lines
-
-
-
-    def save_pool(items):
-
-        header = (
-
-            "# Pulse Madlib Pool\n"
-
-            "# One suggestion per line. Lines starting with # are ignored.\n"
-
-            "# 3-4 lines are randomly chosen and appended to the prompt-plan each beat.\n\n"
-
-        )
-
-        madlib_path.write_text(header + "\n".join(items) + "\n", encoding="utf-8")
-
-
-
-    items = load_pool()
-
-    skip_confirm = [False]
-
-
-
-    bg = "#1a1a2e"
-
-    fg = "#e0e0e0"
-
-    pin_fg = "#555577"
-
-    entry_bg = "#16213e"
-
-    flash_bg = "#1a2a4a"
-
-    flash_fg = "#66aaff"
-
-
-
-    win = tk.Tk()
-
-    win.title("Madlib Pool")
-
-    win.configure(bg=bg)
-
-    win.resizable(False, False)
-
-    win.attributes("-topmost", True)
-
-    win.geometry("520x580")
-
-
-
-    # Header
-
-    hdr = tk.Frame(win, bg=bg)
-
-    hdr.pack(fill="x", padx=16, pady=(14, 6))
-
-    tk.Label(hdr, text="Madlib Pool", bg=bg, fg="#aaaaff",
-
-             font=("Segoe UI", 11, "bold")).pack(side="left")
-
-    count_lbl = tk.Label(hdr, bg="#222244", fg="#888899",
-
-                         font=("Segoe UI", 8), padx=8, pady=2)
-
-    count_lbl.pack(side="left", padx=8)
-
-
-
-    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(0, 8))
-
-
-
-    # Scrollable list area
-
-    canvas = tk.Canvas(win, bg=bg, highlightthickness=0, height=400)
-
-    scrollbar = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
-
-    canvas.configure(yscrollcommand=scrollbar.set)
-
-    scrollbar.pack(side="right", fill="y", padx=(0, 4))
-
-    canvas.pack(fill="both", expand=True, padx=(16, 0))
-
-    list_frame = tk.Frame(canvas, bg=bg)
-
-    canvas_window = canvas.create_window((0, 0), window=list_frame, anchor="nw")
-
-
-
-    def on_frame_configure(e):
-
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-    def on_canvas_configure(e):
-
-        canvas.itemconfig(canvas_window, width=e.width)
-
-    list_frame.bind("<Configure>", on_frame_configure)
-
-    canvas.bind("<Configure>", on_canvas_configure)
-
-
-
-    item_frames = []
-
-
-
-    def update_count():
-
-        count_lbl.config(text=f"{len(items)} suggestion{'s' if len(items) != 1 else ''}")
-
-
-
-    def render_list():
-
-        for f in item_frames:
-
-            f.destroy()
-
-        item_frames.clear()
-
-
-
-        # Pinned items
-
-        for text in PINNED:
-
-            row = tk.Frame(list_frame, bg="#111122", pady=4)
-
-            row.pack(fill="x", pady=2)
-
-            tk.Label(row, text="??", bg="#111122", fg=pin_fg,
-
-                     font=("Segoe UI", 10)).pack(side="left", padx=(8, 4))
-
-            tk.Label(row, text=text, bg="#111122", fg=pin_fg,
-
-                     font=("Segoe UI", 9, "italic"), anchor="w",
-
-                     wraplength=400, justify="left").pack(side="left", fill="x", expand=True)
-
-            item_frames.append(row)
-
-
-
-        # User items
-
-        for i, text in enumerate(items):
-
-            row = tk.Frame(list_frame, bg=entry_bg, pady=4)
-
-            row.pack(fill="x", pady=2)
-
-            lbl = tk.Label(row, text=text, bg=entry_bg, fg=fg,
-
-                           font=("Segoe UI", 9), anchor="w",
-
-                           wraplength=400, justify="left")
-
-            lbl.pack(side="left", padx=(10, 4), fill="x", expand=True)
-
-
-
-            def make_remove(idx, txt, r, l):
-
-                def do_remove():
-
-                    if skip_confirm[0]:
-
-                        items.pop(idx)
-
-                        render_list()
-
-                        update_count()
-
-                        return
-
-                    # Confirm dialog
-
-                    dlg = tk.Toplevel(win)
-
-                    dlg.title("Remove?")
-
-                    dlg.configure(bg=bg)
-
-                    dlg.resizable(False, False)
-
-                    dlg.attributes("-topmost", True)
-
-                    dlg.grab_set()
-
-                    tk.Label(dlg, text="Remove this suggestion?",
-
-                             bg=bg, fg=fg, font=("Segoe UI", 10, "bold"),
-
-                             pady=10).pack(padx=20)
-
-                    tk.Label(dlg, text=f'"{txt}"', bg=bg, fg="#888899",
-
-                             font=("Segoe UI", 9, "italic"),
-
-                             wraplength=320, justify="center").pack(padx=20)
-
-                    dontask_var = tk.BooleanVar()
-
-                    tk.Checkbutton(dlg, text="don't ask me again",
-
-                                   variable=dontask_var,
-
-                                   bg=bg, fg="#666688", selectcolor=entry_bg,
-
-                                   font=("Segoe UI", 8)).pack(pady=(8, 4))
-
-                    btn_row = tk.Frame(dlg, bg=bg)
-
-                    btn_row.pack(pady=(4, 14))
-
-                    def confirm_yes():
-
-                        if dontask_var.get():
-
-                            skip_confirm[0] = True
-
-                        dlg.destroy()
-
-                        items.pop(idx)
-
-                        render_list()
-
-                        update_count()
-
-                    def confirm_no():
-
-                        dlg.destroy()
-
-                    tk.Button(btn_row, text="Cancel", command=confirm_no,
-
-                              bg="#222244", fg="#888899", font=("Segoe UI", 9),
-
-                              padx=12, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-                    tk.Button(btn_row, text="Remove", command=confirm_yes,
-
-                              bg="#441122", fg="#ff6666", font=("Segoe UI", 9, "bold"),
-
-                              padx=12, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-                return do_remove
-
-
-
-            btn = tk.Button(row, text="?", command=make_remove(i, text, row, lbl),
-
-                            bg=entry_bg, fg="#555577", font=("Segoe UI", 10),
-
-                            bd=0, cursor="hand2", padx=8, pady=0,
-
-                            activebackground="#441122", activeforeground="#ff6666")
-
-            btn.pack(side="right", padx=6)
-
-            item_frames.append(row)
-
-
-
-        update_count()
-
-        canvas.yview_moveto(1.0)
-
-
-
-    # Add row
-
-    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(8, 6))
-
-    add_frame = tk.Frame(win, bg=bg)
-
-    add_frame.pack(fill="x", padx=16, pady=(0, 8))
-
-    new_var = tk.StringVar()
-
-    new_entry = tk.Entry(add_frame, textvariable=new_var, bg=entry_bg, fg=fg,
-
-                         insertbackground=fg, font=("Segoe UI", 9), width=38)
-
-    new_entry.pack(side="left", padx=(0, 8), ipady=4)
-
-
-
-    def do_add():
-
-        val = new_var.get().strip()
-
-        if not val:
-
-            return
-
-        items.append(val)
-
-        new_var.set("")
-
-        render_list()
-
-        update_count()
-
-        # Flash the new item
-
-        if item_frames:
-
-            new_row = item_frames[-1]
-
-            orig_bg = entry_bg
-
-            def flash(count=0):
-
-                if count < 6:
-
-                    c = flash_bg if count % 2 == 0 else orig_bg
-
-                    try:
-
-                        new_row.configure(bg=c)
-
-                        for child in new_row.winfo_children():
-
-                            child.configure(bg=c)
-
-                    except Exception:
-
-                        pass
-
-                    win.after(200, lambda: flash(count + 1))
-
-            flash()
-
-            canvas.yview_moveto(1.0)
-
-        new_entry.focus()
-
-
-
-    tk.Button(add_frame, text="+ Add", command=do_add,
-
-              bg="#2a2a4a", fg="#aaaacc", font=("Segoe UI", 9, "bold"),
-
-              padx=12, pady=4, bd=0, cursor="hand2",
-
-              activebackground="#3a3a6a").pack(side="left")
-
-    new_entry.bind("<Return>", lambda e: do_add())
-
-
-
-    # Save / Close buttons
-
-    tk.Frame(win, bg="#333355", height=1).pack(fill="x", padx=16, pady=(4, 8))
-
-    save_frame = tk.Frame(win, bg=bg)
-
-    save_frame.pack(pady=(0, 14))
-
-
-
-    def do_save():
-
-        save_pool(items)
-
-        win.destroy()
-
-
-
-    tk.Button(save_frame, text="Save", command=do_save,
-
-              bg="#533483", fg="white", font=("Segoe UI", 9, "bold"),
-
-              padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-    tk.Button(save_frame, text="Cancel", command=win.destroy,
-
-              bg="#222244", fg="#888899", font=("Segoe UI", 9),
-
-              padx=18, pady=5, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-
-
-    render_list()
-
-    win.mainloop()
-
-
-
-
-
-
-
-    """Open the Settings tkinter window."""
-
-    win = tk.Tk()
-
-    win.title("NeveWare-Pulse ? Settings")
-
-    win.configure(bg="#1a1a2e")
-
-    win.resizable(False, False)
-
-    win.attributes("-topmost", True)
-
-
-
-    pad = {"padx": 8, "pady": 4}
-
-    fg = "#e0e0e0"
-
-    bg = "#1a1a2e"
-
-    entry_bg = "#16213e"
-
-
-
-    tk.Label(win, text="NeveWare-Pulse Settings", bg=bg, fg="#aaaaff",
-
-             font=("Segoe UI", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(10,4))
-
-
-
-    fields = [
-
-        ("Icon Letter",          "icon_letter"),
-
-        ("Active Colour (hex)",  "active_color"),
-
-        ("Inactive Colour (hex)","inactive_color"),
-
-        ("Heartbeat Character",  "heartbeat_character"),
-
-        ("Default Interval (min)","default_interval_minutes"),
-
-        ("Emoji Hotkey",         "emoji_hotkey"),
-
-    ]
-
-
-
-    entries = {}
-
-    for i, (label, key) in enumerate(fields, start=1):
-
-        tk.Label(win, text=label, bg=bg, fg=fg, font=("Segoe UI", 9),
-
-                 anchor="e").grid(row=i, column=0, sticky="e", **pad)
-
-        var = tk.StringVar(value=str(config.get(key, "")))
-
-        e = tk.Entry(win, textvariable=var, bg=entry_bg, fg=fg,
-
-                     insertbackground=fg, width=24, font=("Segoe UI", 9))
-
-        e.grid(row=i, column=1, sticky="w", **pad)
-
-        entries[key] = var
-
-
-
-    # Modules section
-
-    row_offset = len(fields) + 1
-
-    if modules:
-
-        tk.Label(win, text="Installed Modules", bg=bg, fg="#aaaaff",
-
-                 font=("Segoe UI", 10, "bold")).grid(
-
-            row=row_offset, column=0, columnspan=2, pady=(8, 2))
-
-        row_offset += 1
-
-
-
-        mod_enabled = {}
-
-        for m in modules:
-
-            enabled = config.get("modules", {}).get(m.name, {}).get("enabled", False)
-
-            var = tk.BooleanVar(value=enabled)
-
-            mod_enabled[m.name] = var
-
-            tk.Checkbutton(
-
-                win, text=f"{m.display_name}  v{m.manifest.get('version','?')}  ? {m.manifest.get('description','')}",
-
-                variable=var, bg=bg, fg=fg, selectcolor=entry_bg,
-
-                activebackground=bg, activeforeground=fg,
-
-                font=("Segoe UI", 9)
-
-            ).grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=8)
-
-            row_offset += 1
-
-    else:
-
-        mod_enabled = {}
-
-
-
-    # Advanced section
-
-    tk.Label(win, text="Advanced", bg=bg, fg="#aaaaff",
-
-             font=("Segoe UI", 10, "bold")).grid(
-
-        row=row_offset, column=0, columnspan=2, pady=(10, 2), sticky="w", padx=8)
-
-    row_offset += 1
-
-
-
-    # Claude App Path
-
-    claude_path_var = tk.StringVar(
-
-        value=config.get("claude_app_path", "") or ""
-
-    )
-
-
-
-    tk.Label(win, text="Claude App Path", bg=bg, fg=fg,
-
-             font=("Segoe UI", 9), anchor="e").grid(
-
-        row=row_offset, column=0, sticky="e", **pad)
-
-
-
-    path_frame = tk.Frame(win, bg=bg)
-
-    path_frame.grid(row=row_offset, column=1, sticky="w", padx=8, pady=4)
-
-
-
-    path_display = tk.Entry(
-
-        path_frame,
-
-        textvariable=claude_path_var,
-
-        bg=entry_bg, fg="#888899",
-
-        insertbackground=fg,
-
-        width=20,
-
-        font=("Segoe UI", 8),
-
-        state="readonly"
-
-    )
-
-    path_display.pack(side="left")
-
-
-
-    def browse_claude():
-
-        chosen = filedialog.askopenfilename(
-
-            title="Locate Claude App",
-
-            filetypes=[("Executable", "*.exe"), ("All files", "*.*")],
-
-            initialdir=r"C:\Users",
-
-        )
-
-        if chosen:
-
-            claude_path_var.set(chosen)
-
-            path_display.config(fg=fg)
-
-
-
-    tk.Button(
-
-        path_frame,
-
-        text="Browse?",
-
-        command=browse_claude,
-
-        bg="#2a2a4a",
-
-        fg="#aaaacc",
-
-        activebackground="#3a3a5a",
-
-        activeforeground="white",
-
-        font=("Segoe UI", 8),
-
-        padx=8, pady=2,
-
-        bd=0, cursor="hand2"
-
-    ).pack(side="left", padx=(4, 0))
-
-
-
-    hint = "" if config.get("claude_app_path") else "Auto-detect"
-
-    tk.Label(win, text=hint, bg=bg, fg="#555577",
-
-             font=("Segoe UI", 7, "italic")).grid(
-
-        row=row_offset + 1, column=1, sticky="w", padx=8)
-
-    row_offset += 2
-
-
-
-    # Defib restore state toggle
-
-    defib_restore_var = tk.BooleanVar(value=config.get("defib_restore_last_state", True))
-
-    tk.Checkbutton(
-
-        win,
-
-        text="Restore last state after Defibrillator recovery",
-
-        variable=defib_restore_var,
-
-        bg=bg, fg=fg, selectcolor=entry_bg,
-
-        activebackground=bg, activeforeground=fg,
-
-        font=("Segoe UI", 9)
-
-    ).grid(row=row_offset, column=0, columnspan=2, sticky="w", padx=8, pady=(0, 2))
-
-    row_offset += 1
-
-
-
-    # Desktop Commander notice
-
-    dc_note = tk.Label(
-
-        win,
-
-        text="Tip: Install Desktop Commander MCP for full filesystem access.",
-
-        bg=bg, fg="#666688", font=("Segoe UI", 8, "italic")
-
-    )
-
-    dc_note.grid(row=row_offset, column=0, columnspan=2, pady=(4, 0))
-
-    row_offset += 1
-
-
-
-    def save():
-
-        for key, var in entries.items():
-
-            val = var.get()
-
-            if key == "default_interval_minutes":
-
-                try:
-
-                    config[key] = int(val)
-
-                except ValueError:
-
-                    pass
-
-            else:
-
-                config[key] = val
-
-        # Advanced: Claude app path (empty string = use auto-detect)
-
-        config["claude_app_path"] = claude_path_var.get().strip()
-
-        config["defib_restore_last_state"] = defib_restore_var.get()
-
-        for mod_name, var in mod_enabled.items():
-
-            if "modules" not in config:
-
-                config["modules"] = {}
-
-            if mod_name not in config["modules"]:
-
-                config["modules"][mod_name] = {}
-
-            config["modules"][mod_name]["enabled"] = var.get()
-
-        save_config(config)
-
-        on_save(config)
-
-        win.destroy()
-
-
-
-    btn_frame = tk.Frame(win, bg=bg)
-
-    btn_frame.grid(row=row_offset, column=0, columnspan=2, pady=10)
-
-    tk.Button(btn_frame, text="Save", command=save,
-
-              bg="#533483", fg="white", font=("Segoe UI", 9, "bold"),
-
-              padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-    tk.Button(btn_frame, text="Cancel", command=win.destroy,
-
-              bg="#333355", fg=fg, font=("Segoe UI", 9),
-
-              padx=16, pady=4, bd=0, cursor="hand2").pack(side="left", padx=6)
-
-
-
-    win.mainloop()
-
-
-
-
-
 def open_settings(config: dict, modules: list[ModuleInfo], on_save):
 
     """Open the Settings tkinter window."""
@@ -1960,49 +1215,104 @@ class PulseApp:
 
 
 
-        # Re-register both hotkeys after every toggle
+        # Manage F1/F2 based on state — F10 always registered; Green removes F1/F2
+        if self.active:
+            # Resumed (Red): signal pump thread to re-register F1/F2
+            self._register_hotkeys()
+        else:
+            # Paused (Green): unregister F1/F2 to eliminate keyboard interference
+            self._unregister_hotkeys()
 
-        self._register_hotkeys()
+
+
+    def _unregister_hotkeys(self):
+        """Unregister F1 and F2 (Green/paused mode). F10 always stays active."""
+        ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_F1)
+        ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_F2)
+        logger.info("Hotkeys F1/F2 unregistered (Green mode).")
 
 
 
     def _register_hotkeys(self):
+        """Signal pump thread to re-register F1 and F2 (Red/active mode)."""
+        global _pump_thread_id
+        if _pump_thread_id:
+            ctypes.windll.user32.PostThreadMessageW(
+                _pump_thread_id, WM_APP_REREGISTER_F1F2, 0, 0
+            )
+            logger.info("Hotkeys F1/F2 re-registration signalled to pump thread.")
 
-        """Register (or re-register) F1, F2, and F10. Safe to call multiple times."""
 
-        for key in ("f1", "f2", "f10"):
 
-            try:
+    def _start_hotkey_pump(self):
+        """Start the RegisterHotKey message pump in a daemon thread."""
+        t = threading.Thread(target=self._hotkey_pump, daemon=True, name="hotkey-pump")
+        t.start()
 
-                keyboard.remove_hotkey(key)
 
-            except Exception:
 
-                pass
+    def _hotkey_pump(self):
+        """
+        Dedicated thread: registers global hotkeys using RegisterHotKey and pumps
+        WM_HOTKEY messages. Replaces keyboard library's WH_KEYBOARD_LL hooks entirely.
+        """
+        global _pump_thread_id
+        _pump_thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
 
-        try:
+        # Register F1/F2/F10 — WM_HOTKEY posts to THIS thread's message queue
+        ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_F1,  MOD_NOREPEAT, 0x70)  # VK_F1
+        ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_F2,  MOD_NOREPEAT, 0x71)  # VK_F2
+        ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_F10, MOD_NOREPEAT, 0x79)  # VK_F10
 
-            keyboard.add_hotkey("f1", self._toggle)
+        # Register emoji hotkey
+        emoji_hotkey = self.config.get("emoji_hotkey", "ctrl+alt+e")
+        mods, vk = _parse_hotkey_str(emoji_hotkey)
+        ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_EMOJI, mods, vk)
 
-        except Exception as e:
+        logger.info(
+            f"Hotkey pump started (thread {_pump_thread_id}): "
+            f"F1/F2/F10 + {emoji_hotkey}"
+        )
 
-            logger.warning(f"F1 registration failed: {e}")
+        # Unregister F1/F2 if we start in Green (paused) mode
+        if not self.active:
+            ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_F1)
+            ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_F2)
 
-        try:
+        msg = wintypes.MSG()
+        while True:
+            ret = ctypes.windll.user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+            if ret <= 0:
+                break
+            if msg.message == WM_HOTKEY:
+                hid = msg.wParam
+                if hid == _HOTKEY_F1:
+                    threading.Thread(target=self._toggle, daemon=True).start()
+                elif hid == _HOTKEY_F2:
+                    threading.Thread(target=self._listen, daemon=True).start()
+                elif hid == _HOTKEY_F10:
+                    threading.Thread(target=self._shutdown, daemon=True).start()
+                elif hid == _HOTKEY_EMOJI:
+                    if self.emoji:
+                        threading.Thread(
+                            target=self.emoji._open_picker, daemon=True
+                        ).start()
+            elif msg.message == WM_APP_REREGISTER_F1F2:
+                ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_F1, MOD_NOREPEAT, 0x70)
+                ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_F2, MOD_NOREPEAT, 0x71)
+                logger.info("Hotkeys F1/F2 re-registered (Red mode).")
+            elif msg.message == WM_APP_REGISTER_EMOJI:
+                ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_EMOJI)
+                new_hotkey = self.config.get("emoji_hotkey", "ctrl+alt+e")
+                new_mods, new_vk = _parse_hotkey_str(new_hotkey)
+                ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_EMOJI, new_mods, new_vk)
+                logger.info(f"Emoji hotkey re-registered: {new_hotkey}")
+            ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
+            ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
 
-            keyboard.add_hotkey("f2", self._listen)
-
-        except Exception as e:
-
-            logger.warning(f"F2 registration failed: {e}")
-
-        try:
-
-            keyboard.add_hotkey("f10", self._shutdown)
-
-        except Exception as e:
-
-            logger.warning(f"F10 registration failed: {e}")
+        # Cleanup on pump exit
+        for hid in (_HOTKEY_F1, _HOTKEY_F2, _HOTKEY_F10, _HOTKEY_EMOJI):
+            ctypes.windll.user32.UnregisterHotKey(None, hid)
 
 
 
@@ -2336,6 +1646,16 @@ root.mainloop()
 
         combined = "\n\n".join(instructions)
 
+        if combined:
+            enabled_names = [
+                m.name for m in self.modules
+                if self.config.get("modules", {}).get(m.name, {}).get("enabled", False)
+                and m.di_instructions
+            ]
+            logger.info(f"Module DI instructions assembled from: {enabled_names}")
+        else:
+            logger.info("No module DI instructions active.")
+
         if self.heartbeat_controller:
 
             self.heartbeat_controller.set_module_instructions(combined)
@@ -2577,13 +1897,11 @@ root.mainloop()
 
         self._load_modules()
 
-        # Re-register emoji hotkey if changed
-
-        if self.emoji:
-
-            self.emoji.stop()
-
-            self.emoji.start(hotkey=self.config.get("emoji_hotkey", "ctrl+alt+e"))
+        # Re-register emoji hotkey if changed — signal pump thread to update
+        if _pump_thread_id:
+            ctypes.windll.user32.PostThreadMessageW(
+                _pump_thread_id, WM_APP_REGISTER_EMOJI, 0, 0
+            )
 
         logger.info("Settings applied.")
 
@@ -2777,11 +2095,10 @@ root.mainloop()
 
 
 
-        # Register F1 and F10 hotkeys
+        # Start RegisterHotKey pump thread — replaces keyboard library hooks entirely
+        self._start_hotkey_pump()
 
-        self._register_hotkeys()
-
-        logger.info("F1 (pause/resume) and F10 (quit) registered.")
+        logger.info("Hotkey pump started: F1/F2/F10 + emoji via RegisterHotKey.")
 
 
 

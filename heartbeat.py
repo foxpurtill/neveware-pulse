@@ -2,7 +2,7 @@
 heartbeat.py — § timing loop for NeveWare-Pulse.
 
 Alarm-clock pattern (threading.Timer, no polling, no drift).
-Sends § heartbeat prompts to Claude, watches for §restart token,
+Sends § heartbeat prompts to Claude, watches for §restart signal via file,
 reads next:N value to schedule the next beat.
 """
 
@@ -12,11 +12,8 @@ import time
 import random
 import logging
 import threading
-import subprocess
 import datetime
 from pathlib import Path
-import pyperclip
-import pyautogui
 
 import neve_bridge
 
@@ -41,14 +38,19 @@ DEFAULT_HEARTBEAT_PROMPTS = [
 
 logger = logging.getLogger(__name__)
 
-LOG_DIR  = str(Path.home() / "Documents" / "Neve")
-LOG_FILE = os.path.join(LOG_DIR, "heartbeat_log.txt")
+# LOG_DIR is set from config in HeartbeatController.__init__(); default as fallback.
+LOG_DIR = str(Path.home() / "Documents" / "Neve")
 
-# How long to wait for §restart token in the Claude window (seconds)
+# How long to wait for §restart signal file (seconds)
 RESPONSE_TIMEOUT = 480  # 8 minutes
 
-# How long to poll between clipboard checks (seconds)
+# How long to poll between signal file checks (seconds)
 POLL_INTERVAL = 2
+
+
+def _set_log_dir(path: str):
+    global LOG_DIR
+    LOG_DIR = path
 
 
 def _ensure_log_dir():
@@ -57,11 +59,11 @@ def _ensure_log_dir():
 
 def _log(message: str):
     """Append a timestamped line to the heartbeat log."""
-    _ensure_log_dir()
+    log_file = os.path.join(LOG_DIR, "heartbeat_log.txt")
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}\n"
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
+        with open(log_file, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception as e:
         logger.error(f"Log write failed: {e}")
@@ -79,78 +81,89 @@ def _parse_next_interval(response_text: str, fallback: int) -> int:
     return fallback
 
 
-def _get_response_via_clipboard() -> str:
+def _wait_for_restart_token(signal_path: Path, timeout: int = RESPONSE_TIMEOUT) -> tuple[bool, str]:
     """
-    Bring the Claude window to the foreground briefly, Select All + Copy,
-    then read the clipboard. Restores focus to the previous window.
-    Returns the clipboard text or empty string.
-    """
-    import win32gui, win32con
+    Watch for the DI's signal file to trigger the next beat.
 
-    # Locate Claude window
-    found = []
-    def cb(hwnd, _):
-        if not win32gui.IsWindowVisible(hwnd):
-            return True
-        title = win32gui.GetWindowText(hwnd)
-        if any(p in title for p in neve_bridge.CLAUDE_TITLE_PATTERNS):
-            found.append(hwnd)
-        return True
-    win32gui.EnumWindows(cb, None)
+    File format written by DI via Desktop Commander:
+        §restart
+        next:N
 
-    if not found:
-        return ""
-
-    hwnd = found[0]
-    prev_fg = win32gui.GetForegroundWindow()
-
-    try:
-        original_clipboard = pyperclip.paste()
-
-        win32gui.SetForegroundWindow(hwnd)
-        time.sleep(0.15)
-
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.15)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.25)
-
-        text = pyperclip.paste()
-
-        # Restore previous clipboard so we don't pollute it permanently
-        # (we keep the text for parsing but restore after)
-        return text
-
-    except Exception as e:
-        logger.error(f"Clipboard read error: {e}")
-        return ""
-
-    finally:
-        if prev_fg and prev_fg != hwnd:
-            try:
-                win32gui.SetForegroundWindow(prev_fg)
-            except Exception:
-                pass
-
-
-def _wait_for_restart_token(timeout: int = RESPONSE_TIMEOUT) -> tuple[bool, str]:
-    """
-    Poll the Claude window for the §restart token.
-    Returns (found: bool, response_text: str).
+    On detection: reads the file, deletes it, returns (True, content).
+    On timeout: returns (False, "").
     """
     deadline = time.time() + timeout
-    last_text = ""
 
     while time.time() < deadline:
         time.sleep(POLL_INTERVAL)
-        text = _get_response_via_clipboard()
-        if text and text != last_text:
-            last_text = text
-            if "§restart" in text:
-                return True, text
+        if signal_path.exists():
+            try:
+                content = signal_path.read_text(encoding="utf-8").strip()
+                signal_path.unlink()
+                return True, content
+            except Exception as e:
+                logger.warning(f"Signal file read error: {e}")
 
-    # Timeout — return whatever we have
-    return False, last_text
+    return False, ""
+
+
+# ---------------------------------------------------------------------------
+# Prompt sub-functions
+# ---------------------------------------------------------------------------
+
+def _read_prompt_plan(neve_dir: Path) -> str:
+    """Read and clean the DI's prompt-plan.md. Returns body text after ---."""
+    plan_path = neve_dir / "prompt-plan.md"
+    if not plan_path.exists():
+        return ""
+    try:
+        raw = plan_path.read_text(encoding="utf-8").strip()
+        lines = []
+        past_separator = False
+        for line in raw.splitlines():
+            s = line.strip()
+            if s == "---":
+                past_separator = True
+                continue
+            if not past_separator:
+                continue  # skip header/comment block before ---
+            if s.startswith("§restart") or s.lower().startswith("next:"):
+                continue  # strip Pulse machinery tokens
+            lines.append(line)
+        return "\n".join(lines).strip()
+    except Exception as e:
+        _log(f"prompt-plan read failed: {e}")
+        return ""
+
+
+def _read_madlib_pool(neve_dir: Path) -> list:
+    """Read all non-comment lines from madlib-pool.md."""
+    madlib_path = neve_dir / "madlib-pool.md"
+    if not madlib_path.exists():
+        return []
+    try:
+        return [
+            l.strip()
+            for l in madlib_path.read_text(encoding="utf-8").splitlines()
+            if l.strip() and not l.strip().startswith("#")
+        ]
+    except Exception as e:
+        _log(f"madlib-pool read failed: {e}")
+        return []
+
+
+def _read_voice_context(neve_dir: Path, mic_config: dict) -> str:
+    """Return spoken voice context string if available, else empty string."""
+    if mic_config.get("enabled", False):
+        try:
+            from modules.mic_listener.whisper_listener import get_spoken_context
+            spoken = get_spoken_context()
+            if spoken:
+                _log("whisper_listener: injected spoken context into § prompt")
+                return spoken
+        except Exception as e:
+            _log(f"whisper_listener: skipped ({e})")
+    return ""
 
 
 class HeartbeatController:
@@ -167,6 +180,11 @@ class HeartbeatController:
         self._lock = threading.Lock()
         self._last_interval: int = config.get("default_interval_minutes", 30)
         self._module_instructions: str = ""
+        self._signal_path_reminder_sent: bool = False
+
+        # Set log dir from config at construction time
+        neve_dir = Path(config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
+        _set_log_dir(str(neve_dir))
 
     def set_module_instructions(self, instructions: str):
         """Called by tray_app when modules are loaded."""
@@ -178,6 +196,7 @@ class HeartbeatController:
                 return
             self._running = True
             self._paused = False
+        _ensure_log_dir()
         _log("Heartbeat controller started.")
         # Clear stale prompt-plan so first beat is always fresh
         neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
@@ -290,35 +309,15 @@ class HeartbeatController:
           [3-4 randomly chosen lines from madlib-pool.md]
           [module instructions if any]
           [voice/mic context if available]
+          [signal file reminder — once per session only]
         """
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         heartbeat_char = self.config.get("heartbeat_character", "§")
 
-        # Resolve prompt-plan.md path
         neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
-        plan_path = neve_dir / "prompt-plan.md"
-        madlib_path = neve_dir / "madlib-pool.md"
 
         # Read the DI's own prompt plan
-        plan_text = ""
-        if plan_path.exists():
-            try:
-                raw = plan_path.read_text(encoding="utf-8").strip()
-                lines = []
-                past_separator = False
-                for l in raw.splitlines():
-                    s = l.strip()
-                    if s == "---":
-                        past_separator = True
-                        continue
-                    if not past_separator:
-                        continue  # skip header/comment block before ---
-                    if s.startswith("§restart") or s.lower().startswith("next:"):
-                        continue  # strip Pulse machinery tokens
-                    lines.append(l)
-                plan_text = "\n".join(lines).strip()
-            except Exception as e:
-                _log(f"prompt-plan read failed: {e}")
+        plan_text = _read_prompt_plan(neve_dir)
 
         # Fall back to a random default if no plan exists yet
         if not plan_text:
@@ -327,17 +326,11 @@ class HeartbeatController:
             plan_text = random.choice(prompt_pool)
 
         # Read madlib pool and pick 3-4 random suggestions
-        madlib_lines = []
+        madlib_path = neve_dir / "madlib-pool.md"
         if not madlib_path.exists():
             self._write_default_madlib_pool(madlib_path)
-        if madlib_path.exists():
-            try:
-                pool = [l.strip() for l in madlib_path.read_text(encoding="utf-8").splitlines()
-                        if l.strip() and not l.strip().startswith("#")]
-                if pool:
-                    madlib_lines = random.sample(pool, min(4, len(pool)))
-            except Exception as e:
-                _log(f"madlib-pool read failed: {e}")
+        pool = _read_madlib_pool(neve_dir)
+        madlib_lines = random.sample(pool, min(4, len(pool))) if pool else []
 
         # Assemble prompt
         prompt = f"{heartbeat_char} {timestamp}\n\n{plan_text}"
@@ -348,35 +341,28 @@ class HeartbeatController:
         if self._module_instructions:
             prompt += f"\n\n{self._module_instructions}"
 
-        # Voice/mic context injection (unchanged)
+        # Voice/mic context
         mic_config = self.config.get("modules", {}).get("mic_listener", {})
-        if mic_config.get("enabled", False):
-            try:
-                from modules.mic_listener.whisper_listener import get_spoken_context
-                spoken = get_spoken_context()
-                if spoken:
-                    prompt += f"\n\n{spoken}"
-                    _log("whisper_listener: injected spoken context into § prompt")
-            except Exception as e:
-                _log(f"whisper_listener: skipped ({e})")
-        else:
-            try:
-                import sys as _sys
-                _neve_dir = str(neve_dir)
-                if _neve_dir not in _sys.path:
-                    _sys.path.insert(0, _neve_dir)
-                import listen as _listen
-                spoken = _listen.format_for_prompt(minutes=60)
-                if spoken:
-                    prompt += f"\n\n{spoken}"
-                    _log("voice_log: injected recent voice context into § prompt")
-            except Exception as e:
-                _log(f"voice_log: skipped ({e})")
+        spoken = _read_voice_context(neve_dir, mic_config)
+        if spoken:
+            prompt += f"\n\n{spoken}"
+
+        # Signal file path reminder — once per session so DI knows where to write
+        if not self._signal_path_reminder_sent:
+            signal_path = Path(
+                self.config.get("heartbeat_signal_path", "")
+                or neve_dir / "heartbeat_signal.txt"
+            )
+            prompt += (
+                f"\n\n[Pulse signal file: to trigger the next beat, write "
+                f"§restart\\nnext:N to {signal_path} via Desktop Commander]"
+            )
+            self._signal_path_reminder_sent = True
 
         return prompt
 
     def _fire(self):
-        """Timer callback — send § prompt, wait for §restart, schedule next."""
+        """Timer callback — send § prompt, wait for §restart signal, schedule next."""
         with self._lock:
             if not self._running or self._paused:
                 return
@@ -396,21 +382,29 @@ class HeartbeatController:
             self._schedule_next(delay_minutes=self._last_interval)
             return
 
-        # Wait for §restart token
-        found, response_text = _wait_for_restart_token()
+        # Resolve signal file path
+        neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
+        signal_path = Path(
+            self.config.get("heartbeat_signal_path", "")
+            or neve_dir / "heartbeat_signal.txt"
+        )
+        _log(f"Watching for signal file: {signal_path}")
+
+        # Wait for §restart signal file
+        found, response_text = _wait_for_restart_token(signal_path)
         if found:
-            _log(f"§restart detected.")
+            _log(f"§restart signal received.")
         else:
-            _log("Warning: §restart token not found within timeout. Assuming complete.")
+            _log("Warning: §restart signal not received within timeout. Assuming complete.")
 
         # Extract next interval
         next_interval = _parse_next_interval(response_text, fallback=self._last_interval)
         self._last_interval = next_interval
 
-        # Log response summary (first 500 chars)
-        summary = response_text[:500].replace("\n", " ").strip()
+        # Log response summary (first 200 chars)
+        summary = response_text[:200].replace("\n", " ").strip()
         if summary:
-            _log(f"Response: {summary}")
+            _log(f"Signal content: {summary}")
 
         # Re-check paused state — Fox may have gone Green while we were waiting
         with self._lock:
