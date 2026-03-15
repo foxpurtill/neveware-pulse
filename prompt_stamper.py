@@ -112,22 +112,39 @@ def _on_enter(event):
 
 
 _hook_registered = False
+_hook_ref = None
 
 
 def _register_hook():
-    global _hook_registered
+    global _hook_registered, _hook_ref
     if not _hook_registered:
-        keyboard.on_press_key("enter", _on_enter, suppress=True)
-        _hook_registered = True
-        logger.info("prompt_stamper: Enter hook registered.")
+        try:
+            _hook_ref = keyboard.on_press_key("enter", _on_enter, suppress=True)
+            _hook_registered = True
+            logger.info("prompt_stamper: Enter hook registered.")
+        except Exception as e:
+            logger.error(f"prompt_stamper: hook registration failed: {e}")
 
 
 def _unregister_hook():
-    global _hook_registered
+    global _hook_registered, _hook_ref
     if _hook_registered:
-        keyboard.unhook_all()
-        _hook_registered = False
-        logger.info("prompt_stamper: Enter hook removed.")
+        try:
+            if _hook_ref is not None:
+                keyboard.unhook(_hook_ref)
+                _hook_ref = None
+            else:
+                # fallback — remove by key name only (doesn't nuke all hooks)
+                keyboard.unhook_all_hotkeys()
+        except Exception as e:
+            logger.warning(f"prompt_stamper: unhook failed ({e}) — forcing clear")
+            try:
+                keyboard.unhook_all()
+            except Exception:
+                pass
+        finally:
+            _hook_registered = False
+            logger.info("prompt_stamper: Enter hook removed.")
 
 
 def start():
@@ -147,13 +164,12 @@ def stop():
 
 
 def stop_no_unhook():
-    """Stop the prompt stamper without calling unhook_all.
-    Used during full shutdown where _os._exit(0) handles cleanup —
-    avoids killing other keyboard hooks (e.g. F10) mid-execution."""
-    global _active, _hook_registered
+    """Stop without unhooking — used during full shutdown where os._exit(0) handles cleanup."""
+    global _active, _hook_registered, _hook_ref
     with _lock:
         _active = False
         _hook_registered = False
+        _hook_ref = None
     logger.info("prompt_stamper: stopped (no unhook — process exiting).")
 
 

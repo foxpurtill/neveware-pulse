@@ -179,6 +179,9 @@ class HeartbeatController:
             self._running = True
             self._paused = False
         _log("Heartbeat controller started.")
+        # Clear stale prompt-plan so first beat is always fresh
+        neve_dir = Path(self.config.get("neve_dir", "") or Path.home() / "Documents" / "Neve")
+        self._clear_prompt_plan(neve_dir / "prompt-plan.md")
         # Initial delay: 5 minutes after launch
         self._schedule_next(delay_minutes=5, initial=True)
 
