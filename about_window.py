@@ -104,18 +104,24 @@ def _prompt_restart(base_dir: Path):
 
     def do_restart():
         dlg.destroy()
+        base = base_dir
+        defib = base / 'defibrillator.bat'
+        if defib.exists():
+            subprocess.Popen(
+                ['cmd', '/c', 'start', '', str(defib)],
+                creationflags=0x00000008  # DETACHED_PROCESS
+            )
+        else:
+            pythonw = Path(sys.executable).with_name('pythonw.exe')
+            if not pythonw.exists():
+                pythonw = Path(sys.executable)
+            launcher = base / 'launcher.pyw'
+            subprocess.Popen(
+                ['powershell', '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+                 f'Start-Sleep -Seconds 2; Start-Process "{pythonw}" "{launcher}"'],
+                creationflags=0x00000008
+            )
         win.destroy()
-        pythonw = Path(sys.executable).with_name('pythonw.exe')
-        if not pythonw.exists():
-            pythonw = Path(sys.executable)
-        launcher = base_dir / 'launcher.pyw'
-        subprocess.Popen(
-            ['powershell', '-NoProfile', '-Command',
-             f'Stop-Process -Name pythonw -ErrorAction SilentlyContinue; '
-             f'Start-Sleep -Milliseconds 800; '
-             f'Start-Process "{pythonw}" "{launcher}"'],
-            creationflags=0x08000008
-        )
 
     tk.Button(btn_row, text='Restart Pulse Now',
               command=do_restart,
