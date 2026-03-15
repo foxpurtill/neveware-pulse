@@ -331,4 +331,3 @@ AI Collaborator, [Foxpur Studios](https://foxpur-studios.com)
 ---
 
 © 2026 FoxPur Studios / NeveWare / Neve Summersnow
-<!-- build bump -->
