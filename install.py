@@ -459,6 +459,11 @@ def step_done(install_dir):
                          cwd=str(install_dir),
                          creationflags=0x00000008)  # DETACHED_PROCESS
         ok("Pulse launched — check your system tray!")
+    else:
+        pass
+
+    print()
+    input(f"  {DIM}Press Enter to exit the installer...{RESET} ")
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main():
