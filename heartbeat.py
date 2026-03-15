@@ -411,7 +411,6 @@ class HeartbeatController:
         summary = response_text[:500].replace("\n", " ").strip()
         if summary:
             _log(f"Response: {summary}")
-        _log(f"Next heartbeat in: {next_interval} mins")
 
         # Re-check paused state — Fox may have gone Green while we were waiting
         with self._lock:
