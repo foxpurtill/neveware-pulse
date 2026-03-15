@@ -118,7 +118,9 @@ def step_location(silent):
         target.mkdir(parents=True, exist_ok=True)
         info(f"Copying files to {target} ...")
         for item in BASE_DIR.iterdir():
-            if item.name in {".git", "__pycache__", "*.pyc"}:
+            if item.name in {".git", "__pycache__", "config.json", "config.template.json"}:
+                continue
+            if item.suffix == ".pyc":
                 continue
             dest = target / item.name
             if item.is_dir():
@@ -237,7 +239,8 @@ def step_config(install_dir, identity, modules):
     config_path = install_dir / "config.json"
     neve_dir    = Path.home() / "Documents" / identity.get("ai_name", "Neve")
 
-    # Load existing config if present (preserve user settings on reinstall)
+    # Load existing config only from the INSTALL TARGET (not from source/dev)
+    # This ensures fresh installs start clean, reinstalls preserve user settings
     existing = {}
     if config_path.exists():
         try:
