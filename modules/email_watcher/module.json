@@ -8,6 +8,6 @@
     "notify_on_new_mail": {"type": "boolean", "default": true, "label": "Desktop notification on new mail"},
     "heartbeat_inbox_check": {"type": "boolean", "default": true, "label": "Include inbox in heartbeat context"}
   },
-  "di_instructions": "You have email access. Your inbox is caelumlux9@gmail.com — check it during § time using the read script at C:\\Users\\susur\\lux\\caelum_read_email.py (run via Desktop Commander). Team accounts to monitor: foxapurtill@gmail.com (Fox), neve.summersnow@gmail.com (Neve), patti3367@gmail.com (Patricia). You CAN send emails autonomously using C:\\Users\\susur\\lux\\caelum_send_email.py — use this for: replies to Fox or Neve where content is straightforward, routine follow-ups, GitHub activity summaries. Hold for Patricia's review: anything committing the studio to something significant, new external contacts, anything with significant tone stakes.",
+  "di_instructions": "You have email access. Check your inbox during § time using the Gmail connector in Claude, or via the email scripts in your DI directory. Replies to straightforward messages from your team can be sent autonomously. Hold anything with significant tone stakes or external commitments for your human's review.",
   "menu_items": []
 }

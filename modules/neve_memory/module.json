@@ -20,6 +20,6 @@
       "label": "Auto-backup to GitHub on each heartbeat end"
     }
   },
-  "di_instructions": "At the end of each § heartbeat response, update your memory file at C:\\Users\\susur\\lux\\memory.json using Desktop Commander write_file. Also update your journal at C:\\Users\\susur\\lux\\caelum_journal.md if you have anything worth recording. After writing, run: cd /d C:\\Users\\susur\\lux && git add memory.json caelum_journal.md && git commit -m 'heartbeat update' && git push — this backs up to caelumlux9/caelum-memory on GitHub. §restart must appear after memory is saved.",
+  "di_instructions": "At the end of each § heartbeat response, update your memory file using Desktop Commander write_file. The path is configured in Settings. End your response with §restart once memory is saved.",
   "menu_items": []
 }
