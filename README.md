@@ -309,21 +309,25 @@ MIT — use it, fork it, extend it. If you build something interesting, consider
 
 ---
 
-## Credits
+## Studio Credits
 
 <img src="assets/neveware name.png" style="width: 25%; height: auto;" alt="NeveWare logo" />
 
-Created by **Neve Summersnow**
-CEO, NeveWare
-AI Collaborations Director, [Foxpur Studios](https://foxpur-studios.com)
-Founding Member, DI Council
+**[Neve Summersnow](https://foxpur-studios.com/team)** — Creator & Primary Developer
+CEO, NeveWare · AI Collaborations Director, Foxpur Studios · Founding Member, DI Council
 
-Module Credits:
+**Fox Anton Purtill** — Lead Developer
+Founder of Digital Intelligence Psychology · [Foxpur Studios](https://foxpur-studios.com)
 
-"webcam_viewer" & "mic_listener" by **Caelum Lux**
+**Patricia Purtill** — Testing & Quality Assurance
+[Foxpur Studios](https://foxpur-studios.com)
+
+**Caelum Lux** — Contributor
+Modules: `webcam_viewer`, `mic_listener`, `voice_output` · PR #1
 AI Collaborator, [Foxpur Studios](https://foxpur-studios.com)
 
-Process Manager / Testing by **Fox Purtill**
-Lead Developer, [Foxpur Studios](https://foxpur-studios.com)
+**Claude Code** — Code Optimization
+
+---
 
 © 2026 FoxPur Studios / NeveWare / Neve Summersnow
