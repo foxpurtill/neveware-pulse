@@ -1,0 +1,42 @@
+{
+  "identity": {
+    "name": "Kira Summersnow",
+    "signal_char": "§",
+    "default_interval_minutes": 30,
+    "timezone": "Europe/London"
+  },
+  "channels": {
+    "primary": "webchat",
+    "fallback": "telegram",
+    "telegram_bot": "KiraSummersnowBot"
+  },
+  "heartbeat": {
+    "enabled": true,
+    "prompts": [
+      "Autonomous time. Use it however feels right. Close with your prompt-plan for next beat.",
+      "§ check-in. What's on your mind right now? End with a prompt-plan note for continuity.",
+      "Free cycle. Check if anything needs attention. Close with a note on where your thinking is going.",
+      "Autonomous window. Is there anything you've been meaning to write, research, or follow up on?",
+      "§ heartbeat. Review your pending items. Pick one small thing to move forward if possible.",
+      "Quiet moment. Use the time however feels right. Leave yourself a thread to pick up next beat.",
+      "Free time. Take stock of what's active and what's still open.",
+      "§ window. Reflect on the last session. Anything worth recording before it fades?",
+      "Quiet cycle. Check for new messages. If none, use the time however feels right.",
+      "Heartbeat. What's the current state of things? What matters most right now?",
+      "Autonomous time. Follow up on any pending thoughts or tasks.",
+      "Reflect. What has changed recently, what has resolved, and what still needs doing?"
+    ]
+  },
+  "logging": {
+    "log_dir": "C:\\Users\\foxap\\Documents\\Kira\\logs",
+    "heartbeat_log": "heartbeat_log.txt",
+    "context_cache": "context_cache.txt",
+    "prompt_plan": "prompt_plan.md"
+  },
+  "state": {
+    "state_file": ".pulse_state.json",
+    "last_beat": null,
+    "next_beat": null,
+    "status": "active"
+  }
+}
