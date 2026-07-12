@@ -3,7 +3,7 @@
   "ai_name": "Neve",
   "active_color": "#44BB44",
   "inactive_color": "#FF4444",
-  "heartbeat_character": "§",
+  "heartbeat_character": "\u00a7",
   "default_interval_minutes": 5,
   "heartbeat_prompts": [],
   "neve_dir": "C:\\Users\\foxap\\Documents\\neve",
@@ -14,14 +14,14 @@
   "listen_duration_seconds": 8,
   "ffplay_path": "",
   "elevenlabs_voice_id": "21m00Tcm4TlvDq8ikWAM",
-  "elevenlabs_api_key": "752ff869242c6e153c2c2ea81bc40be3abc4cf0a4be1fc8683b7b5790c28ef52",
+  "elevenlabs_api_key": "",
   "emoji_hotkey": "ctrl+alt+e",
   "recent_emoji": [
-    "😊",
-    "😂",
-    "😍",
-    "😀",
-    "Ã°Å¸Ëœâ‚¬"
+    "\ud83d\ude0a",
+    "\ud83d\ude02",
+    "\ud83d\ude0d",
+    "\ud83d\ude00",
+    "\u00c3\u00b0\u00c5\u00b8\u00cb\u0153\u00e2\u201a\u00ac"
   ],
   "defib_restore_last_state": false,
   "modules": {
@@ -59,7 +59,7 @@
     },
     "voice_output": {
       "enabled": true,
-      "api_key": "752ff869242c6e153c2c2ea81bc40be3abc4cf0a4be1fc8683b7b5790c28ef52",
+      "api_key": "",
       "voice_id": "21m00Tcm4TlvDq8ikWAM",
       "voice_name": "Rachel"
     }
